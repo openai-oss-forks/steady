@@ -1,0 +1,42 @@
+openapi: 3.0.3
+info:
+  title: Synthetic service
+  version: 1.0.0
+paths:
+  /api/v1/dashboard:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, widgets, layout_type]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                layout_type: { type: string, enum: [ordered, free] }
+                widgets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              example: { ok: true }
+  /api/v1/hosts:
+    get:
+      parameters:
+        - in: query
+          name: filter
+          schema: { type: string }
+      responses:
+        "200":
+          description: Hosts
+          content:
+            application/json:
+              example: { hosts: [] }

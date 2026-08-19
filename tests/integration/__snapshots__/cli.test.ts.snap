@@ -1,0 +1,36 @@
+export const snapshot = {};
+
+snapshot[`validate: clean spec → snapshot stdout 1`] = `
+"All good
+"
+`;
+
+snapshot[`validate: fatal spec → snapshot stderr 1`] = `
+"error[E1004]: Unresolved reference: #/components/schemas/Ghost
+ --> #/paths/~1users/get/responses/200/content/application~1json/schema
+  |
+  |  \$ref: '#/components/schemas/Ghost'
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |        Target does not exist
+  |
+  =   actual: #/components/schemas/Ghost
+  = Check that the referenced path exists in the spec
+
+1 error
+For details, try: steady explain E1004
+"
+`;
+
+snapshot[`validate: warnings → snapshot stderr 1`] = `
+"warning[E1008]: Conflicting path patterns: /users/{id}, /users/{userId}
+ --> #/paths
+  |
+  |  /users/{id}
+  |  /users/{userId}
+  |
+  = These paths match the same URL patterns. Routing will use first match
+
+1 warning
+For details, try: steady explain E1008
+"
+`;

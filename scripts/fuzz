@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+STEADY_FUZZ=1 deno task test tests/integration/fuzz.test.ts "$@"

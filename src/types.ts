@@ -1,0 +1,309 @@
+// Internal types for Steady (non-OpenAPI types)
+
+import type { Diagnostic, IssueCategory } from "./diagnostic.ts";
+import type { LogLevel } from "./logging/mod.ts";
+import type {
+  ConcreteArrayFormat,
+  ConcreteObjectFormat,
+} from "./param-format.ts";
+
+export { VERSION } from "./version.ts";
+
+/** Default server port */
+export const DEFAULT_PORT = 3000;
+
+/** HTTP methods supported by OpenAPI (plus draft QUERY method) */
+export const HTTP_METHODS = [
+  "get",
+  "post",
+  "put",
+  "delete",
+  "patch",
+  "head",
+  "options",
+  "trace",
+  "query",
+] as const;
+export type HttpMethod = typeof HTTP_METHODS[number];
+
+export function isHttpMethod(method: string): method is HttpMethod {
+  return (HTTP_METHODS as readonly string[]).includes(method);
+}
+
+/**
+ * X-Steady-* header names used by the mock server.
+ * Request headers can be sent by clients to override behavior.
+ * Response headers are informational and sent back to clients.
+ */
+export const HEADERS = {
+  // Request headers (clients can send these to override behavior)
+  /** When "true", E3xxx (sdk-issue) diagnostics cause 400 instead of mock response */
+  REJECT_ON_ERROR: "X-Steady-Reject-On-Error",
+  /** Override array query param format */
+  QUERY_ARRAY_FORMAT: "X-Steady-Query-Array-Format",
+  /** Override object query param format */
+  QUERY_OBJECT_FORMAT: "X-Steady-Query-Object-Format",
+  /** Override array form data format */
+  FORM_ARRAY_FORMAT: "X-Steady-Form-Array-Format",
+  /** Override object form data format */
+  FORM_OBJECT_FORMAT: "X-Steady-Form-Object-Format",
+  /** Override array size for generated responses (sets both min and max) */
+  ARRAY_SIZE: "X-Steady-Array-Size",
+  /** Override minimum array size for generated responses */
+  ARRAY_MIN: "X-Steady-Array-Min",
+  /** Override maximum array size for generated responses */
+  ARRAY_MAX: "X-Steady-Array-Max",
+  /** Override seed for deterministic generation (-1 for random) */
+  SEED: "X-Steady-Seed",
+  /** Number of items to stream for streaming responses (default: 5) */
+  STREAM_COUNT: "X-Steady-Stream-Count",
+  /** Interval in milliseconds between streamed items (default: 100) */
+  STREAM_INTERVAL_MS: "X-Steady-Stream-Interval-Ms",
+
+  // Response headers (informational)
+  /** The OpenAPI path pattern that matched the request */
+  MATCHED_PATH: "X-Steady-Matched-Path",
+  /** How the response body was generated: "generated" | "none" */
+  EXAMPLE_SOURCE: "X-Steady-Example-Source",
+  /** Indicates a serialization error occurred (set to "true") */
+  SERIALIZATION_ERROR: "X-Steady-Serialization-Error",
+  /** Indicates the response is being streamed */
+  STREAMING: "X-Steady-Streaming",
+} as const;
+
+/**
+ * How array query parameters are serialized.
+ * Maps to OpenAPI style/explode combinations.
+ *
+ * - 'auto': read from OpenAPI spec's style/explode (default)
+ * - 'repeat': colors=red&colors=green (style=form, explode=true)
+ * - 'comma': colors=red,green,blue (style=form, explode=false)
+ * - 'space': colors=red%20green%20blue (style=spaceDelimited)
+ * - 'pipe': colors=red|green|blue (style=pipeDelimited)
+ * - 'brackets': colors[]=red&colors[]=green (PHP/Rails style, non-standard)
+ */
+export type QueryArrayFormat =
+  | "auto"
+  | "repeat"
+  | "comma"
+  | "space"
+  | "pipe"
+  | "brackets";
+
+/** All valid array format values */
+export const VALID_ARRAY_FORMATS: readonly QueryArrayFormat[] = [
+  "auto",
+  "repeat",
+  "comma",
+  "space",
+  "pipe",
+  "brackets",
+] as const;
+
+/** Set for O(1) lookup in type guard */
+const VALID_ARRAY_FORMATS_SET: ReadonlySet<string> = new Set(
+  VALID_ARRAY_FORMATS,
+);
+
+/**
+ * How object query parameters are serialized.
+ * Maps to OpenAPI style/explode combinations.
+ *
+ * - 'auto': read from OpenAPI spec's style/explode (default)
+ * - 'flat': role=admin&firstName=Alex (style=form, explode=true)
+ * - 'flat-comma': id=role,admin,firstName,Alex (style=form, explode=false)
+ * - 'brackets': id[role]=admin&id[firstName]=Alex (style=deepObject)
+ * - 'dots': id.role=admin&id.firstName=Alex (non-standard, SDK compat)
+ */
+export type QueryObjectFormat =
+  | "auto"
+  | "flat"
+  | "flat-comma"
+  | "brackets"
+  | "dots";
+
+/** All valid object format values */
+export const VALID_OBJECT_FORMATS: readonly QueryObjectFormat[] = [
+  "auto",
+  "flat",
+  "flat-comma",
+  "brackets",
+  "dots",
+] as const;
+
+/** Set for O(1) lookup in type guard */
+const VALID_OBJECT_FORMATS_SET: ReadonlySet<string> = new Set(
+  VALID_OBJECT_FORMATS,
+);
+
+/** Type guard for valid array format strings */
+export function isValidArrayFormat(
+  value: string | null,
+): value is QueryArrayFormat {
+  return value !== null && VALID_ARRAY_FORMATS_SET.has(value);
+}
+
+/** Type guard for valid object format strings */
+export function isValidObjectFormat(
+  value: string | null,
+): value is QueryObjectFormat {
+  return value !== null && VALID_OBJECT_FORMATS_SET.has(value);
+}
+
+/** Type guard for form array format strings (excludes "auto"). */
+export function isValidFormArrayFormat(
+  value: string | null,
+): value is ConcreteArrayFormat {
+  return value !== null && value !== "auto" &&
+    VALID_ARRAY_FORMATS_SET.has(value);
+}
+
+/** Type guard for form object format strings (excludes "auto"). */
+export function isValidFormObjectFormat(
+  value: string | null,
+): value is ConcreteObjectFormat {
+  return value !== null && value !== "auto" &&
+    VALID_OBJECT_FORMATS_SET.has(value);
+}
+
+export interface ValidatorConfig {
+  /**
+   * Enable strict oneOf validation per JSON Schema semantics.
+   * When false (default), oneOf passes if ANY variant matches (union-like).
+   * When true, oneOf requires EXACTLY one variant to match.
+   */
+  strictOneOf?: boolean;
+
+  /**
+   * How to parse array query parameters.
+   * Default: 'auto' (read from OpenAPI spec)
+   */
+  queryArrayFormat?: QueryArrayFormat;
+
+  /**
+   * How to parse object query parameters.
+   * Default: 'auto' (read from OpenAPI spec)
+   */
+  queryObjectFormat?: QueryObjectFormat;
+
+  /**
+   * How to parse array form data fields.
+   * Default: 'auto' (read from OpenAPI spec encoding)
+   */
+  formArrayFormat?: QueryArrayFormat;
+
+  /**
+   * How to parse object form data fields (nested properties).
+   * Default: 'auto' (read from OpenAPI spec encoding)
+   */
+  formObjectFormat?: QueryObjectFormat;
+}
+
+export interface GeneratorConfig {
+  /**
+   * Minimum array size for generated responses.
+   * Default: 1
+   */
+  arrayMin?: number;
+
+  /**
+   * Maximum array size for generated responses.
+   * Default: 1
+   */
+  arrayMax?: number;
+
+  /**
+   * Seed for deterministic random generation.
+   * If not set, uses random seed.
+   */
+  seed?: number;
+}
+
+export interface StreamingConfig {
+  /**
+   * Number of items to stream for streaming responses.
+   * Default: 5, max: 1000
+   */
+  count?: number;
+
+  /**
+   * Interval in milliseconds between streamed items.
+   * Default: 100
+   */
+  interval?: number;
+}
+
+export interface ServerConfig {
+  /** Maximum buffered request body size; defaults to 16 MiB. */
+  maxRequestBodyBytes?: number;
+  port: number;
+  host: string;
+  rejectOnSdkError?: boolean;
+  quiet?: boolean;
+  logLevel: LogLevel;
+  logFormat?: "text" | "json" | "ci";
+  logBodies?: boolean;
+  color?: boolean;
+  validator?: ValidatorConfig;
+  generator?: GeneratorConfig;
+  streaming?: StreamingConfig;
+  startupDiagnostics?: Diagnostic[];
+  /** Path to the spec file, for "run `steady validate <spec>`" hints. */
+  specPath?: string;
+  /** Exit with code 1 if any runtime diagnostic has category "ambiguous". */
+  failOnAmbiguous?: boolean;
+  /** Exit with code 1 if any runtime diagnostic has severity "warning". */
+  failOnWarnings?: boolean;
+  /** Unix socket path. When set, the server listens on a unix socket instead of TCP. */
+  socketPath?: string;
+}
+
+// Validation types
+
+/**
+ * Represents a single validation issue found during request validation.
+ * Contains full context for debugging and error attribution.
+ */
+export interface ValidationIssue {
+  // Where
+  path: string; // e.g., "body.email" or "query.limit"
+  specPointer?: string; // e.g., "#/components/schemas/User/properties/email"
+
+  // What
+  keyword?: string; // JSON Schema keyword that failed (format, type, required, etc.)
+  message: string; // Human-readable message
+
+  // Expected vs Actual
+  expected?: string; // Human-readable expected value
+  actual?: unknown; // The specific failing value
+
+  // Attribution
+  category?: IssueCategory;
+  attribution?: { confidence: number; reasoning: string[] };
+
+  // Fix
+  suggestion?: string;
+}
+
+// Re-export types that are used in multiple places
+export type {
+  ComponentsObject,
+  ContentObject,
+  ExampleObject,
+  MediaTypeObject,
+  OpenAPIRaw,
+  OperationObject,
+  ParameterObject,
+  PathItemObject,
+  PathsObject,
+  ReferenceObject,
+  RequestBodyObject,
+  ResponseObject,
+  ResponsesObject,
+  SchemaObject,
+} from "@steady/openapi";
+
+// Re-export the canonical isReference primitive from @steady/openapi
+// so that downstream modules can import it alongside the types it
+// narrows without reaching across packages every time.
+export { isReference } from "@steady/openapi";

@@ -1,0 +1,6 @@
+{
+  "name": "@steady/json-schema",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts"
+}

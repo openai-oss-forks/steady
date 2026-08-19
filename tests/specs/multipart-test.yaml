@@ -1,0 +1,328 @@
+openapi: 3.1.0
+info:
+  title: Multipart test
+  version: 1.0.0
+paths:
+  /skills/{skill_id}/versions:
+    post:
+      operationId: CreateSkillVersion
+      parameters:
+        - in: path
+          name: skill_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateSkillVersionBody"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSkillVersionBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /uploads/{upload_id}/parts:
+    post:
+      operationId: UploadParts
+      parameters:
+        - in: path
+          name: upload_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadPartsBody"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadPartsBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /items:
+    post:
+      operationId: CreateItem
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateItemBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /workers:
+    post:
+      operationId: CreateWorker
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            encoding:
+              metadata:
+                contentType: application/json
+            schema:
+              $ref: "#/components/schemas/CreateWorkerBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /deployments:
+    post:
+      operationId: CreateDeployment
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateDeploymentBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /batches:
+    post:
+      operationId: CreateBatch
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateBatchBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /manifests:
+    post:
+      operationId: CreateManifest
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            encoding:
+              manifest:
+                contentType: application/json
+            schema:
+              $ref: "#/components/schemas/CreateManifestBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /files:
+    post:
+      operationId: CreateFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateFileBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                required:
+                  - id
+              example:
+                id: file_123
+components:
+  schemas:
+    CreateSkillVersionBody:
+      type: object
+      properties:
+        files:
+          anyOf:
+            - type: array
+              items:
+                type: string
+                format: binary
+            - type: string
+              format: binary
+        default:
+          type: boolean
+    UploadPartsBody:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            type: string
+            format: binary
+      required:
+        - files
+    CreateItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        active:
+          type: boolean
+      required:
+        - name
+        - count
+    CreateWorkerBody:
+      type: object
+      properties:
+        metadata:
+          type: object
+          properties:
+            main_module:
+              type: string
+            compatibility_date:
+              type: string
+          required:
+            - main_module
+        script:
+          type: string
+          format: binary
+      required:
+        - metadata
+    CreateDeploymentBody:
+      type: object
+      properties:
+        config:
+          type: object
+          properties:
+            region:
+              type: string
+            replicas:
+              type: integer
+          required:
+            - region
+        source:
+          type: string
+          format: binary
+    CreateBatchBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+      required:
+        - items
+    ExpiresAfter:
+      type: object
+      properties:
+        anchor:
+          type: string
+          enum:
+            - created_at
+        seconds:
+          type: integer
+      required:
+        - anchor
+        - seconds
+    CreateFileBody:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        purpose:
+          type: string
+          enum:
+            - assistants
+            - batch
+        expires_after:
+          $ref: "#/components/schemas/ExpiresAfter"
+      required:
+        - file
+        - purpose
+    CreateManifestBody:
+      type: object
+      properties:
+        manifest:
+          type: string
+      required:
+        - manifest

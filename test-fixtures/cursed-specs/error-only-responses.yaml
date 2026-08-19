@@ -1,0 +1,55 @@
+# Cursed: Error-only response codes
+#
+# Some specs define only error responses (e.g. 500) and a default,
+# with no success status code at all. This forces mock servers to
+# return 500 for every request, which looks like a crash.
+#
+# Real-world source: Magento B2B v2.2.10 (delivery-option endpoint)
+# Pattern: 101 out of 455 endpoints only define 500 + default
+#
+# How Steady handles it:
+# Returns the first defined status code. If that's 500, the response
+# looks like an error but is technically correct per the spec.
+
+openapi: "3.0.3"
+info:
+  title: Error-Only Responses API
+  version: "1.0.0"
+
+paths:
+  /delivery-option:
+    post:
+      summary: Handle delivery option
+      operationId: handleDeliveryOption
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - selectedOption
+              properties:
+                selectedOption:
+                  type: string
+      responses:
+        "500":
+          description: Internal Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string

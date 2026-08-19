@@ -1,0 +1,138 @@
+# CURSED SPEC: 204 No Content with Response Body
+#
+# Violation: RFC 9110 Section 9.3.5 (HTTP 204)
+#   Quote: "A server MUST NOT send content in a response to a DELETE
+#   request." and "A 204 response is terminated by the end of the
+#   header section; it cannot contain content or trailers."
+#
+# Also violates: HTTP/1.1 semantics - 204 and 304 are "null body" status
+# codes. The Deno/Web runtime enforces this by throwing:
+#   "Response with null body status cannot have body"
+#
+# Real-world occurrence: Found in AWS APIs via openapi-directory fuzzing.
+#   amazonaws.com/billingconductor uses 204 as success status for POST
+#   endpoints while also defining response body content. Other AWS specs
+#   (chime, devicefarm, etc.) do the same.
+#
+# Why it's cursed:
+#   - 204 literally means "No Content"
+#   - HTTP runtimes (Deno, browsers) reject body on 204/304
+#   - Mock servers crash trying to attach a body to a 204 response
+#   - The spec contradicts itself: "no content" + "here's the content schema"
+#
+# What happens:
+#   - Prism: Returns 500 Internal Server Error
+#   - Deno HTTP server: Throws TypeError
+#   - Steady: Should strip the body for null-body status codes (204, 304)
+
+openapi: 3.1.0
+info:
+  title: Cursed API - 204 With Body
+  version: 1.0.0
+  description: |
+    Spec that defines response bodies for 204 No Content responses.
+    This is invalid per HTTP semantics but common in AWS OpenAPI specs.
+
+paths:
+  /resources:
+    post:
+      summary: Create a resource
+      operationId: createResource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "204":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateResourceResponse"
+
+  /resources/{id}/tags:
+    post:
+      summary: Tag a resource
+      operationId: tagResource
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - Tags
+              properties:
+                Tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "204":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagResourceResponse"
+
+  # Normal 200 endpoint for comparison
+  /resources/{id}:
+    get:
+      summary: Get a resource
+      operationId: getResource
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resource"
+
+components:
+  schemas:
+    Resource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    CreateResourceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+
+    TagResourceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean

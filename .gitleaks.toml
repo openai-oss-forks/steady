@@ -1,0 +1,4 @@
+title = "Steady secret detection"
+
+[extend]
+useDefault = true

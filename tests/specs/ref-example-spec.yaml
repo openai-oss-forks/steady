@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: Ref Example API
+  version: 1.0.0
+
+components:
+  schemas:
+    setting_value:
+      type: string
+      enum: [on, off]
+
+  examples:
+    setting_on:
+      summary: Setting enabled
+      value:
+        id: "cache_reserve"
+        value: "on"
+        editable: true
+
+paths:
+  /settings/{setting_id}:
+    patch:
+      summary: Update a setting
+      operationId: updateSetting
+      parameters:
+        - name: setting_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - value
+              properties:
+                value:
+                  $ref: "#/components/schemas/setting_value"
+      responses:
+        "200":
+          description: Setting updated
+          content:
+            application/json:
+              examples:
+                on:
+                  $ref: "#/components/examples/setting_on"
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  value:
+                    type: string
+                  editable:
+                    type: boolean
+                required:
+                  - id
+                  - value
+                  - editable

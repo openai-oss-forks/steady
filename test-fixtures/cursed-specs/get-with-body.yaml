@@ -1,0 +1,120 @@
+# CURSED SPEC: Request Body on GET
+#
+# Violation: Not a spec violation per OpenAPI (requestBody is allowed on any
+#   method). However, RFC 9110 says clients SHOULD NOT send content in GET
+#   requests, and many HTTP implementations strip the body.
+#
+# Real-world occurrence: Yes - seen in Elasticsearch, CouchDB, chaingateway.io,
+#   and other APIs that use GET with a JSON body for complex queries.
+#
+# Why it's cursed:
+#   - fetch() throws TypeError when constructing a GET Request with a body
+#   - Deno.serve strips the body before the handler receives it (req.body is null)
+#   - Proxies, CDNs, and load balancers may strip or reject GET bodies
+#   - HTTP/2 implementations vary in their handling
+#   - The QUERY method (RFC 9110) was created specifically to solve this
+#
+# What happens:
+#   - fetch() API: TypeError("Request with GET/HEAD method cannot have body.")
+#   - Deno.serve: Body silently stripped, req.body is null
+#   - Node.js http.request: Sends the body (lower-level, no restriction)
+#   - curl: Sends the body with -d flag (requires --request GET)
+#   - Go net/http: Sends the body
+#
+# How Steady handles it:
+#   - E1020 warning at startup for each GET/HEAD with requestBody
+#   - Suggests using QUERY method instead
+#   - Body validation is skipped (body never arrives)
+
+openapi: 3.1.0
+info:
+  title: Cursed API - GET with Request Body
+  version: 1.0.0
+  description: |
+    Endpoints that define a request body on GET. Legal per OpenAPI,
+    but the body is silently stripped by most HTTP server implementations.
+
+paths:
+  /search:
+    get:
+      operationId: search
+      summary: Search with GET body (like Elasticsearch)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              example:
+                results: []
+                total: 0
+
+    # The correct alternative: QUERY method
+    query:
+      operationId: searchQuery
+      summary: Same search using QUERY method (RFC 9110)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              example:
+                results: []
+                total: 0
+
+  /balances/{account}:
+    get:
+      operationId: getBalance
+      summary: Get balance with optional body filter (like chaingateway)
+      parameters:
+        - name: account
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Balance
+          content:
+            application/json:
+              example:
+                balance: "100.00"

@@ -1,0 +1,634 @@
+import { assertEquals } from "@std/assert";
+import type { Schema } from "@steady/json-schema";
+import type { FragmentPointer } from "@steady/json-pointer";
+import type { SpecResolver, ValidationNode } from "./types.ts";
+import { interpret, resolveDataAtPath } from "./interpreter.ts";
+
+/**
+ * Stub spec resolver. Returns the schema associated with the given path.
+ * Tests register schemas by pointer, and the interpreter looks them up.
+ */
+function makeResolver(schemas: Record<string, Schema>): SpecResolver {
+  return {
+    resolve(schemaPath: FragmentPointer): Schema {
+      const schema = schemas[schemaPath];
+      if (!schema) {
+        throw new Error(`Test resolver: no schema for "${schemaPath}"`);
+      }
+      return schema;
+    },
+  };
+}
+
+Deno.test("interpret", async (t) => {
+  // ── Valid nodes ────────────────────────────────────────────────────
+
+  await t.step("valid node → no diagnostics, structurally valid", () => {
+    const node: ValidationNode = {
+      valid: true,
+      path: ["body"],
+      schemaPath: "#/schema",
+    };
+
+    const result = interpret(node, makeResolver({}), "body", {});
+
+    assertEquals(result.diagnostics, []);
+    assertEquals(result.structurallyValid, true);
+    assertEquals(result.structuralFailureCount, 0);
+  });
+
+  // ── Leaf nodes ─────────────────────────────────────────────────────
+
+  await t.step("structural leaf → one diagnostic, structurally invalid", () => {
+    const node: ValidationNode = {
+      valid: false,
+      keyword: "required",
+      path: ["body", "name"],
+      schemaPath: "#/properties/name",
+      field: "name",
+    };
+
+    const resolver = makeResolver({
+      "#/properties/name": {},
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    assertEquals(result.diagnostics.length, 1);
+    assertEquals(result.diagnostics[0]!.code, "E3007");
+    assertEquals(result.structurallyValid, false);
+    assertEquals(result.structuralFailureCount, 1);
+  });
+
+  await t.step("content leaf → one diagnostic, structurally valid", () => {
+    const node: ValidationNode = {
+      valid: false,
+      keyword: "pattern",
+      path: ["body", "email"],
+      schemaPath: "#/properties/email",
+    };
+
+    const resolver = makeResolver({
+      "#/properties/email": { pattern: "^.+@.+$" },
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    assertEquals(result.diagnostics.length, 1);
+    assertEquals(result.diagnostics[0]!.code, "E4002");
+    assertEquals(result.structurallyValid, true);
+    assertEquals(result.structuralFailureCount, 0);
+  });
+
+  // ── Container nodes (no composition keyword) ──────────────────────
+
+  await t.step("container with mixed children → merges results", () => {
+    const node: ValidationNode = {
+      valid: false,
+      path: ["body"],
+      schemaPath: "#/schema",
+      children: [
+        {
+          valid: false,
+          keyword: "required",
+          path: ["body", "name"],
+          schemaPath: "#/properties/name",
+          field: "name",
+        },
+        {
+          valid: false,
+          keyword: "pattern",
+          path: ["body", "email"],
+          schemaPath: "#/properties/email",
+        },
+      ],
+    };
+
+    const resolver = makeResolver({
+      "#/properties/name": {},
+      "#/properties/email": { pattern: "^.+@.+$" },
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    assertEquals(result.diagnostics.length, 2);
+    assertEquals(result.diagnostics[0]!.code, "E3007");
+    assertEquals(result.diagnostics[1]!.code, "E4002");
+    // One structural failure (required) makes it structurally invalid
+    assertEquals(result.structurallyValid, false);
+    assertEquals(result.structuralFailureCount, 1);
+  });
+
+  await t.step(
+    "container with all content children → structurally valid",
+    () => {
+      const node: ValidationNode = {
+        valid: false,
+        path: ["body"],
+        schemaPath: "#/schema",
+        children: [
+          {
+            valid: false,
+            keyword: "pattern",
+            path: ["body", "name"],
+            schemaPath: "#/properties/name",
+          },
+          {
+            valid: false,
+            keyword: "minLength",
+            path: ["body", "email"],
+            schemaPath: "#/properties/email",
+          },
+        ],
+      };
+
+      const resolver = makeResolver({
+        "#/properties/name": {},
+        "#/properties/email": {},
+      });
+
+      const result = interpret(node, resolver, "body", {});
+
+      assertEquals(result.diagnostics.length, 2);
+      assertEquals(result.structurallyValid, true);
+      assertEquals(result.structuralFailureCount, 0);
+    },
+  );
+
+  // ── Composition nodes ─────────────────────────────────────────────
+
+  await t.step("oneOf composition → delegates to attributeOneOf", () => {
+    // Two variants: first structurally matches with a content error,
+    // second structurally fails
+    const node: ValidationNode = {
+      valid: false,
+      keyword: "oneOf",
+      path: ["body"],
+      schemaPath: "#/schema/oneOf",
+      children: [
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/oneOf/0",
+          variantIndex: 0,
+          children: [
+            {
+              valid: false,
+              keyword: "pattern",
+              path: ["body", "card_number"],
+              schemaPath: "#/schema/oneOf/0/properties/card_number",
+            },
+          ],
+        },
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/oneOf/1",
+          variantIndex: 1,
+          children: [
+            {
+              valid: false,
+              keyword: "required",
+              path: ["body", "account"],
+              schemaPath: "#/schema/oneOf/1/properties/account",
+              field: "account",
+            },
+          ],
+        },
+      ],
+    };
+
+    const resolver = makeResolver({
+      "#/schema/oneOf": {},
+      "#/schema/oneOf/0/properties/card_number": {},
+      "#/schema/oneOf/1/properties/account": {},
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    // oneOf: variant 0 structurally matches (pattern is content),
+    // variant 1 doesn't (required is structural). Returns variant 0.
+    assertEquals(result.diagnostics.length, 1);
+    assertEquals(result.diagnostics[0]!.code, "E4002");
+    assertEquals(result.structurallyValid, true);
+  });
+
+  await t.step("allOf composition → merges all children", () => {
+    const node: ValidationNode = {
+      valid: false,
+      keyword: "allOf",
+      path: ["body"],
+      schemaPath: "#/schema/allOf",
+      children: [
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/allOf/0",
+          children: [
+            {
+              valid: false,
+              keyword: "required",
+              path: ["body", "name"],
+              schemaPath: "#/schema/allOf/0/properties/name",
+              field: "name",
+            },
+          ],
+        },
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/allOf/1",
+          children: [
+            {
+              valid: false,
+              keyword: "pattern",
+              path: ["body", "role"],
+              schemaPath: "#/schema/allOf/1/properties/role",
+            },
+          ],
+        },
+      ],
+    };
+
+    const resolver = makeResolver({
+      "#/schema/allOf": {},
+      "#/schema/allOf/0/properties/name": {},
+      "#/schema/allOf/1/properties/role": {},
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    assertEquals(result.diagnostics.length, 2);
+    assertEquals(result.structurallyValid, false);
+    assertEquals(result.structuralFailureCount, 1);
+  });
+
+  await t.step("anyOf composition → structural match wins", () => {
+    const node: ValidationNode = {
+      valid: false,
+      keyword: "anyOf",
+      path: ["body"],
+      schemaPath: "#/schema/anyOf",
+      children: [
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/anyOf/0",
+          variantIndex: 0,
+          children: [
+            {
+              valid: false,
+              keyword: "pattern",
+              path: ["body", "value"],
+              schemaPath: "#/schema/anyOf/0/properties/value",
+            },
+          ],
+        },
+        {
+          valid: false,
+          path: ["body"],
+          schemaPath: "#/schema/anyOf/1",
+          variantIndex: 1,
+          children: [
+            {
+              valid: false,
+              keyword: "required",
+              path: ["body", "other"],
+              schemaPath: "#/schema/anyOf/1/properties/other",
+              field: "other",
+            },
+          ],
+        },
+      ],
+    };
+
+    const resolver = makeResolver({
+      "#/schema/anyOf": {},
+      "#/schema/anyOf/0/properties/value": {},
+      "#/schema/anyOf/1/properties/other": {},
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    // anyOf: variant 0 structurally matches (pattern is content)
+    assertEquals(result.diagnostics.length, 1);
+    assertEquals(result.diagnostics[0]!.code, "E4002");
+    assertEquals(result.structurallyValid, true);
+  });
+
+  // ── Discriminator with data ────────────────────────────────────────
+
+  await t.step(
+    "oneOf with discriminator uses request data to select variant",
+    () => {
+      const node: ValidationNode = {
+        valid: false,
+        keyword: "oneOf",
+        path: ["body"],
+        schemaPath: "#/schema/oneOf",
+        children: [
+          {
+            valid: false,
+            path: ["body"],
+            schemaPath: "#/schema/oneOf/0",
+            variantIndex: 0,
+            children: [
+              {
+                valid: false,
+                keyword: "pattern",
+                path: ["body", "card_number"],
+                schemaPath: "#/schema/oneOf/0/properties/card_number",
+              },
+            ],
+          },
+          {
+            valid: false,
+            path: ["body"],
+            schemaPath: "#/schema/oneOf/1",
+            variantIndex: 1,
+            children: [
+              {
+                valid: false,
+                keyword: "required",
+                path: ["body", "account"],
+                schemaPath: "#/schema/oneOf/1/properties/account",
+                field: "account",
+              },
+            ],
+          },
+        ],
+      };
+
+      const oneOfSchema: Schema = {
+        discriminator: { propertyName: "type" },
+        oneOf: [
+          { properties: { type: { const: "card" } } },
+          { properties: { type: { const: "bank" } } },
+        ],
+      };
+
+      const resolver = makeResolver({
+        "#/schema/oneOf": oneOfSchema,
+        "#/schema/oneOf/0/properties/card_number": {},
+        "#/schema/oneOf/1/properties/account": {},
+      });
+
+      // data has type: "card" → selects variant 0
+      const data = { type: "card", card_number: "bad" };
+      const result = interpret(node, resolver, "body", data);
+
+      assertEquals(result.diagnostics.length, 1);
+      assertEquals(result.diagnostics[0]!.code, "E4002");
+      assertEquals(result.diagnostics[0]!.attribution.confidence, 0.95);
+    },
+  );
+
+  // ── Nested composition ────────────────────────────────────────────
+
+  await t.step("deeply nested: container wrapping leaf", () => {
+    const node: ValidationNode = {
+      valid: false,
+      path: ["body"],
+      schemaPath: "#/schema",
+      children: [
+        {
+          valid: false,
+          path: ["body", "address"],
+          schemaPath: "#/schema/properties/address",
+          children: [
+            {
+              valid: false,
+              keyword: "required",
+              path: ["body", "address", "street"],
+              schemaPath: "#/schema/properties/address/properties/street",
+              field: "street",
+            },
+          ],
+        },
+      ],
+    };
+
+    const resolver = makeResolver({
+      "#/schema/properties/address/properties/street": {},
+    });
+
+    const result = interpret(node, resolver, "body", {});
+
+    assertEquals(result.diagnostics.length, 1);
+    assertEquals(result.diagnostics[0]!.code, "E3007");
+    assertEquals(result.diagnostics[0]!.requestPath, "body.address.street");
+    assertEquals(result.structurallyValid, false);
+  });
+
+  // ── E3013: Required field in optional parent ────────────────────
+
+  await t.step(
+    "E3013: required field in optional parent → ambiguous",
+    () => {
+      // Schema: { properties: { address: { properties: { city: ... }, required: ["city"] } } }
+      // "address" is NOT in the parent's required array → optional parent
+      const node: ValidationNode = {
+        valid: false,
+        keyword: "required",
+        path: ["body", "address", "city"],
+        schemaPath: "#/schema/properties/address/properties/city",
+        field: "city",
+      };
+
+      const resolver = makeResolver({
+        "#/schema/properties/address/properties/city": {},
+        "#/schema": {
+          properties: { address: {} },
+          // address NOT in required → optional
+        },
+      });
+
+      const result = interpret(node, resolver, "body", {});
+
+      assertEquals(result.diagnostics.length, 1);
+      assertEquals(result.diagnostics[0]?.code, "E3013");
+      assertEquals(result.diagnostics[0]?.category, "ambiguous");
+      assertEquals(result.diagnostics[0]?.attribution.confidence, 0.6);
+      const reasoning = result.diagnostics[0]?.attribution.reasoning;
+      assertEquals(
+        reasoning?.[0],
+        "Parent object 'address' is optional in the schema",
+      );
+      assertEquals(
+        reasoning?.[1],
+        "Required field 'city' is inside optional parent 'address'",
+      );
+      // Original E3007 "Missing required field" classification should NOT be present
+      assertEquals(
+        reasoning?.some((r) => r.includes("Missing required field")),
+        false,
+      );
+    },
+  );
+
+  await t.step(
+    "E3007: required field in required parent stays sdk-issue",
+    () => {
+      const node: ValidationNode = {
+        valid: false,
+        keyword: "required",
+        path: ["body", "address", "city"],
+        schemaPath: "#/schema/properties/address/properties/city",
+        field: "city",
+      };
+
+      const resolver = makeResolver({
+        "#/schema/properties/address/properties/city": {},
+        "#/schema": {
+          properties: { address: {} },
+          required: ["address"], // address IS required
+        },
+      });
+
+      const result = interpret(node, resolver, "body", {});
+
+      assertEquals(result.diagnostics.length, 1);
+      assertEquals(result.diagnostics[0]?.code, "E3007");
+      assertEquals(result.diagnostics[0]?.category, "sdk-issue");
+    },
+  );
+
+  await t.step(
+    "anyOf [X, null] with non-null data attributes failure to X",
+    () => {
+      // Real-world nullable wrapper pattern. Schema:
+      //   files: anyOf: [{type: array, items: binary}, {type: null}]
+      // SDK sends a scalar value where files is expected (e.g. wrong format).
+      // Expected: diagnostic from the array variant with high confidence,
+      // NOT E3012 ambiguous. The null branch is uninformative when data
+      // is non-null and should not dilute attribution.
+      const node: ValidationNode = {
+        valid: false,
+        keyword: "anyOf",
+        path: ["body", "files"],
+        // Tree-validator sets composition schemaPath to the parent schema,
+        // consistent with how leaf keywords like `type` and `required` do.
+        schemaPath: "#/schema/properties/files",
+        children: [
+          {
+            valid: false,
+            path: ["body", "files"],
+            schemaPath: "#/schema/properties/files/anyOf/0",
+            variantIndex: 0,
+            children: [
+              {
+                valid: false,
+                keyword: "type",
+                path: ["body", "files"],
+                schemaPath: "#/schema/properties/files/anyOf/0",
+              },
+            ],
+          },
+          {
+            valid: false,
+            path: ["body", "files"],
+            schemaPath: "#/schema/properties/files/anyOf/1",
+            variantIndex: 1,
+            children: [
+              {
+                valid: false,
+                keyword: "type",
+                path: ["body", "files"],
+                schemaPath: "#/schema/properties/files/anyOf/1",
+              },
+            ],
+          },
+        ],
+      };
+
+      const resolver = makeResolver({
+        "#/schema/properties/files": {
+          anyOf: [
+            { type: "array", items: { type: "string", format: "binary" } },
+            { type: "null" },
+          ],
+        },
+        "#/schema/properties/files/anyOf/0": {
+          type: "array",
+          items: { type: "string", format: "binary" },
+        },
+        "#/schema/properties/files/anyOf/1": { type: "null" },
+      });
+
+      // Body data has files set to a scalar (the bug we want to detect).
+      const data = { files: "[File]" };
+      const result = interpret(node, resolver, "body", data);
+
+      assertEquals(result.diagnostics.length, 1);
+      const diag = result.diagnostics[0]!;
+      assertEquals(diag.category, "sdk-issue");
+      assertEquals(
+        diag.code,
+        "E3008",
+        `expected E3008, got ${diag.code}: ${diag.message}`,
+      );
+      assertEquals(diag.attribution.confidence, 1);
+    },
+  );
+
+  await t.step(
+    "E3007: top-level required field not re-attributed",
+    () => {
+      // path = ["body", "name"] → only one level, no parent to check
+      const node: ValidationNode = {
+        valid: false,
+        keyword: "required",
+        path: ["body", "name"],
+        schemaPath: "#/schema/properties/name",
+        field: "name",
+      };
+
+      const resolver = makeResolver({
+        "#/schema/properties/name": {},
+      });
+
+      const result = interpret(node, resolver, "body", {});
+
+      assertEquals(result.diagnostics.length, 1);
+      assertEquals(result.diagnostics[0]?.code, "E3007");
+    },
+  );
+});
+
+Deno.test("resolveDataAtPath", async (t) => {
+  await t.step("path equals location → returns full data", () => {
+    const data = { name: "Alice", type: "card" };
+    assertEquals(resolveDataAtPath(data, ["body"]), data);
+  });
+
+  await t.step("strips location prefix and navigates into data", () => {
+    const data = { payment: { type: "card", amount: 100 } };
+    assertEquals(resolveDataAtPath(data, ["body", "payment"]), data.payment);
+  });
+
+  await t.step("deep path navigation", () => {
+    const data = { a: { b: { c: "deep" } } };
+    assertEquals(resolveDataAtPath(data, ["body", "a", "b", "c"]), "deep");
+  });
+
+  await t.step("missing intermediate key → returns undefined", () => {
+    const data = { name: "Alice" };
+    assertEquals(
+      resolveDataAtPath(data, ["body", "payment", "type"]),
+      undefined,
+    );
+  });
+
+  await t.step("non-object data → returns undefined for nested path", () => {
+    assertEquals(resolveDataAtPath("string", ["body", "name"]), undefined);
+  });
+
+  await t.step("null data → returns undefined for nested path", () => {
+    assertEquals(resolveDataAtPath(null, ["body", "name"]), undefined);
+  });
+
+  await t.step("non-body location", () => {
+    const data = { limit: "10" };
+    assertEquals(resolveDataAtPath(data, ["query", "limit"]), "10");
+  });
+});

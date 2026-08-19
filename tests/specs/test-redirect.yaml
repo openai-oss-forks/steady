@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Test API for redirect responses
+  version: 1.0.0
+
+paths:
+  /cards:
+    post:
+      summary: Create a card (redirects, no Location defined)
+      operationId: createCard
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "303":
+          description: See Other
+
+  /cards-with-example:
+    post:
+      summary: Create a card (redirects, Location example)
+      operationId: createCardWithExample
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "303":
+          description: See Other
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+              example: /cards/abc-123
+
+  /cards-with-default:
+    post:
+      summary: Create a card (redirects, Location default)
+      operationId: createCardWithDefault
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "303":
+          description: See Other
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+                default: /cards/default-location
+
+  /cards-with-header-ref:
+    post:
+      summary: Create a card (redirects, Location via header $ref)
+      operationId: createCardWithHeaderRef
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "303":
+          description: See Other
+          headers:
+            Location:
+              $ref: "#/components/headers/LocationHeader"
+
+  /cards-with-schema-ref:
+    post:
+      summary: Create a card (redirects, Location via schema $ref)
+      operationId: createCardWithSchemaRef
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "303":
+          description: See Other
+          headers:
+            Location:
+              schema:
+                $ref: "#/components/schemas/LocationUrl"
+
+components:
+  headers:
+    LocationHeader:
+      schema:
+        type: string
+        format: uri
+      example: /cards/from-header-ref
+
+  schemas:
+    LocationUrl:
+      type: string
+      format: uri
+      default: /cards/from-schema-ref

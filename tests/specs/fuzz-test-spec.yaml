@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: Fuzz Test API
+  version: 1.0.0
+
+paths:
+  /accounts:
+    post:
+      summary: Create an account
+      operationId: createAccount
+      parameters:
+        - name: api_key
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - plan
+              properties:
+                name:
+                  type: string
+                plan:
+                  type: string
+                  enum: [free, pro, enterprise]
+                email:
+                  type: string
+                  format: email
+              additionalProperties: false
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              example:
+                id: "acc-123"
+                name: "Test Corp"
+                plan: "free"
+
+  /accounts/{account_id}:
+    get:
+      summary: Get an account
+      operationId: getAccount
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include_deleted
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Account found
+          content:
+            application/json:
+              example:
+                id: "acc-123"
+                name: "Test Corp"
+
+    put:
+      summary: Update an account
+      operationId: updateAccount
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                plan:
+                  type: string
+                  enum: [free, pro, enterprise]
+      responses:
+        "200":
+          description: Account updated
+
+  /items:
+    get:
+      summary: List items
+      operationId: listItems
+      parameters:
+        - name: limit
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Items listed
+          content:
+            application/json:
+              example:
+                - id: "item-1"
+                  name: "First"

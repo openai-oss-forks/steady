@@ -1,0 +1,83 @@
+{
+  "name": "@steady/cli",
+  "version": "0.22.2",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./cli": "./cmd/steady.ts"
+  },
+  "workspace": [
+    "./packages/*"
+  ],
+  "imports": {
+    "@std/cli": "jsr:@std/cli@1.0.24",
+    "@std/assert": "jsr:@std/assert@1.0.18",
+    "@std/media-types": "jsr:@std/media-types@1.1.0",
+    "@std/path": "jsr:@std/path@1.1.4",
+    "@std/testing": "jsr:@std/testing@1.0.17",
+    "@std/yaml": "jsr:@std/yaml@1.0.10"
+  },
+  "tasks": {
+    "dev": "deno run --watch --allow-read --allow-net --allow-env --allow-write cmd/steady.ts --auto-reload",
+    "start": "deno run --allow-read --allow-net --allow-env --allow-write cmd/steady.ts",
+    "check": "deno check cmd/**/*.ts src/**/*.ts packages/**/*.ts scripts/**/*.ts tests/**/*.ts mod.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "check-boundaries": "deno run --allow-read scripts/check-boundaries.ts",
+    "test": "deno test --allow-read --allow-write --allow-net --allow-env --allow-run",
+    "test:watch": "deno test --allow-read --allow-write --allow-net --allow-env --allow-run --watch",
+    "test:coverage": "deno test --allow-read --allow-write --allow-net --allow-env --allow-run --coverage=coverage && deno coverage coverage",
+    "test:json-schema": "deno test --allow-read --allow-write --allow-net --allow-env packages/json-schema/**/*.test.ts",
+    "test:parser": "deno test --allow-read --allow-write --allow-net --allow-env packages/openapi/**/*.test.ts",
+    "test:json-pointer": "deno test --allow-read --allow-write --allow-net --allow-env packages/json-pointer/**/*.test.ts",
+    "test:integration": "deno test --allow-read --allow-write --allow-net --allow-env tests/**/*.test.ts",
+    "test:edge-cases": "deno test --allow-read --allow-write --allow-net --allow-env tests/edge-cases/**/*.test.ts",
+    "test-all": "deno fmt && deno check cmd/steady.ts && deno lint --quiet && deno task check-boundaries && deno task test"
+  },
+  "compilerOptions": {
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "strict": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true
+  },
+  "exclude": [
+    "test-fixtures/openapi-directory/",
+    "sdk-tests/"
+  ],
+  "fmt": {
+    "exclude": [
+      "packages/json-schema/test-suite/",
+      "tests/fixtures/",
+      "sdk-tests/"
+    ]
+  },
+  "lint": {
+    "rules": {
+      "tags": [
+        "recommended"
+      ],
+      "include": [
+        "ban-ts-comment",
+        "no-explicit-any"
+      ]
+    },
+    "exclude": [
+      "oas-tools/**",
+      "packages/json-schema/test-suite/",
+      "research/**",
+      "sdk-tests/**"
+    ]
+  },
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  }
+}

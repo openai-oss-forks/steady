@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: Multipart regression repro
+  version: 1.0.0
+paths:
+  /uploads/{upload_id}/versions:
+    post:
+      operationId: CreateUploadVersion
+      parameters:
+        - in: path
+          name: upload_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateUploadVersionBody"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadVersionBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+  /uploads/{upload_id}/arrays:
+    post:
+      operationId: UploadArrayParts
+      parameters:
+        - in: path
+          name: upload_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadArrayBody"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadArrayBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+components:
+  schemas:
+    CreateUploadVersionBody:
+      type: object
+      properties:
+        files:
+          anyOf:
+            - type: array
+              items:
+                type: string
+                format: binary
+            - type: string
+              format: binary
+        default:
+          type: boolean
+    UploadArrayBody:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            type: string
+            format: binary
+      required:
+        - files

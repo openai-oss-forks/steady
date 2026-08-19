@@ -1,0 +1,42 @@
+openapi: 3.1.0
+info:
+  title: File Upload API
+  version: 1.0.0
+paths:
+  /upload:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Upload successful
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /download:
+    get:
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /text:
+    get:
+      responses:
+        "200":
+          description: Plain text
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Hello world

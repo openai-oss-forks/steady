@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: steady-secrets
+        name: Scan staged changes for secrets
+        entry: scripts/check-secrets --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
