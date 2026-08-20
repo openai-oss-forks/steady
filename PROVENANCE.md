@@ -46,7 +46,8 @@ operation and formatting changes. The license from that pinned revision is
 preserved in [licenses/OpenAPI.txt](licenses/OpenAPI.txt). The QUERY extension
 came from
 [upstream Steady commit `baf0e53f`](https://github.com/dgellow/steady/commit/baf0e53f39e8da80c553bd8e08eba958fa43dca2).
-Attribution and modification notices are collected in [NOTICE](NOTICE).
+Attribution and modification notices are collected in [NOTICE](NOTICE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The unused JSON Schema 2020-12 meta-schema copies and their reference directory
 were removed from the current tree. Earlier commits still contain those files;

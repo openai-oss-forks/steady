@@ -489,6 +489,7 @@ deno task check-boundaries  # Verify package dependencies
 
 The upstream Steady code is distributed under the [MIT license](LICENSE).
 [PROVENANCE.md](PROVENANCE.md) records the exact source revision, retained
-third-party files, and import changes. See [NOTICE](NOTICE) for third-party
-attribution and license terms. The upstream logo, research material, vendor API
-fixtures, and automated publishing are omitted.
+third-party files, and import changes. See [NOTICE](NOTICE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party attribution and
+license terms. The upstream logo, research material, vendor API fixtures, and
+automated publishing are omitted.
