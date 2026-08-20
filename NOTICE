@@ -1,0 +1,24 @@
+Steady
+
+This source snapshot is derived from dgellow/steady at
+983ba871c94a6628c64568252bb2b61d753bcff1.
+Copyright (c) 2025, 2026 Samuel "dgellow" El-Borai.
+The upstream MIT license and notice are preserved in LICENSE.
+
+JSON Schema 2020-12 meta-schemas
+Copyright (c) 2022 JSON Schema Specification Authors.
+The files identified in PROVENANCE.md are redistributed under the BSD-3-Clause
+option of the upstream license. The complete upstream license text, including
+the alternative Academic Free License 3.0, is in licenses/JSON-Schema.txt.
+The vocabulary files omit their upstream root $vocabulary annotations and have
+formatting differences. The main meta-schema is unchanged.
+
+OpenAPI 3.1 schema (2022-10-07)
+Copyright The Linux Foundation.
+Licensed under the Apache License, Version 2.0. See licenses/OpenAPI.txt.
+The retained schema was modified to support the HTTP QUERY method and reformatted.
+The pinned upstream source contains no separate root NOTICE file.
+
+These notices do not change the licenses of the identified third-party files.
+See PROVENANCE.md and provenance/third-party.json for immutable source references,
+file hashes, and modification details.
