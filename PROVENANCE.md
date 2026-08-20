@@ -1,0 +1,62 @@
+# Source provenance
+
+## Steady source
+
+This repository began as a source-only snapshot of
+[`dgellow/steady@983ba871c94a6628c64568252bb2b61d753bcff1`](https://github.com/dgellow/steady/commit/983ba871c94a6628c64568252bb2b61d753bcff1)
+(v0.22.2). The upstream maintainer changed the project license from Elastic-2.0
+to MIT in
+[`7c0c5c4ee5e903e8541f8f650cedaa36cbbbe337`](https://github.com/dgellow/steady/commit/7c0c5c4ee5e903e8541f8f650cedaa36cbbbe337).
+The imported [LICENSE](LICENSE) preserves that revision's copyright and
+permission notice byte-for-byte.
+
+The import excludes upstream Git history, branches, issues, pull requests,
+releases, packages, Actions history, workflows, the logo, research directories,
+vendor API fixtures, and third-party test-suite submodules. OpenAI's changes
+include logging redaction, loopback-only TCP binding, resource limits, synthetic
+regression fixtures, pinned dependencies, and local security guidance. No
+upstream package or release binary is redistributed.
+
+The two outside pull requests identified during the license-history review were
+made before the MIT change:
+
+- [#113](https://github.com/dgellow/steady/pull/113) changed the grammar of the
+  README's opening description. That description has been independently reworded
+  here.
+- [#114](https://github.com/dgellow/steady/pull/114) changed the upstream
+  SDK-test workflow. That workflow is excluded from this repository.
+
+Upstream history also contains AI-attributed commits. The public history and
+license change establish what upstream published; they do not independently
+prove the maintainer's rights in every contribution or the origin of every
+AI-assisted change. Any unresolved rights question must be addressed with the
+appropriate rights holder and legal reviewer before public redistribution. This
+document records evidence, not a legal determination or release authorization.
+
+## Retained standards files
+
+The [machine-readable inventory](provenance/third-party.json) records the
+retained OpenAPI schema's SHA-256, immutable upstream source, upstream SHA-256,
+and changes. The source comparison was checked against parsed JSON.
+
+`packages/openapi/schemas/openapi-3.1.json` comes from the
+[official OpenAPI schema at `157a4c81`](https://github.com/OAI/OpenAPI-Specification/blob/157a4c81ae537ef793b2bee368bc00d88b461de8/schemas/v3.1/schema.json).
+It is licensed under Apache-2.0 and differs by the addition of the HTTP `query`
+operation and formatting changes. The license from that pinned revision is
+preserved in [licenses/OpenAPI.txt](licenses/OpenAPI.txt). The QUERY extension
+came from
+[upstream Steady commit `baf0e53f`](https://github.com/dgellow/steady/commit/baf0e53f39e8da80c553bd8e08eba958fa43dca2).
+Attribution and modification notices are collected in [NOTICE](NOTICE).
+
+The unused JSON Schema 2020-12 meta-schema copies and their reference directory
+were removed from the current tree. Earlier commits still contain those files;
+this cleanup does not rewrite history. Their original source and license records
+remain available in
+[commit `e791160`](https://github.com/openai/steady/tree/e7911609576a0828c6234f374634d00322fb39b5).
+The two upstream JSON Schema HTML placeholders contained no specification text
+and were also removed.
+
+Runtime and test dependencies are resolved separately from the exact versions
+and integrity hashes in [deno.lock](deno.lock); their source code is not
+vendored in this snapshot. Any future binary or package distribution must review
+and include the notices required for what it bundles.

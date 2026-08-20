@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "packages/openapi/schemas/openapi-3.1.json",
+      "source": "https://github.com/OAI/OpenAPI-Specification/blob/157a4c81ae537ef793b2bee368bc00d88b461de8/schemas/v3.1/schema.json",
+      "sha256": "d663c9d248b54e18ad20ef8c2504c8a7e711456b4295dd396d0641715e627ea0",
+      "source_sha256": "da01ba28852cac0de53893797cb8d1942bc3b05084f526dcc216717dec314ed0",
+      "changes": [
+        "Added QUERY operation under /$defs/path-item/properties/query",
+        "JSON formatting"
+      ]
+    }
+  ]
+}

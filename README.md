@@ -2,8 +2,8 @@
 
 _Pronounced /ˈstiːdi/, like "steed-y"_
 
-OpenAPI 3.0/3.1 mock server built to be fast and reliable. Validates requests
-against specs and generates responses from schemas or examples.
+Steady checks HTTP requests against OpenAPI 3.0/3.1 specifications and produces
+mock responses from their schemas or examples.
 
 ## Installation
 
@@ -485,10 +485,10 @@ deno task fmt               # Format
 deno task check-boundaries  # Verify package dependencies
 ```
 
-## Provenance
+## License and provenance
 
-Derived from `dgellow/steady` at `983ba871c94a6628c64568252bb2b61d753bcff1`. The
-upstream MIT license and copyright notice are preserved in [LICENSE](LICENSE).
-The upstream logo, research material, vendor API fixtures, and automated
-publishing are omitted. This snapshot is not a claim that redistribution
-approval is complete.
+The upstream Steady code is distributed under the [MIT license](LICENSE).
+[PROVENANCE.md](PROVENANCE.md) records the exact source revision, retained
+third-party files, and import changes. See [NOTICE](NOTICE) for third-party
+attribution and license terms. The upstream logo, research material, vendor API
+fixtures, and automated publishing are omitted.
