@@ -12,5 +12,6 @@ The retained schema was modified to support the HTTP QUERY method and reformatte
 The pinned upstream source contains no separate root NOTICE file.
 
 These notices do not change the licenses of the identified third-party files.
-See PROVENANCE.md and provenance/third-party.json for immutable source references,
-file hashes, and modification details.
+See THIRD_PARTY_NOTICES.md, PROVENANCE.md, and provenance/third-party.json for
+component notices, immutable source references, file hashes, and modification
+details.

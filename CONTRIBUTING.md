@@ -9,7 +9,8 @@ validation results. Use synthetic fixtures; do not add vendor corpora, private
 keys, real credentials, production requests, or unreviewed generated assets.
 Preserve license and attribution notices. New upstream imports and dependency
 changes need a pinned revision and provenance review. Keep the source and
-license records in [PROVENANCE.md](PROVENANCE.md) and [NOTICE](NOTICE) current.
+license records in [PROVENANCE.md](PROVENANCE.md), [NOTICE](NOTICE), and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) current.
 
 Run `./scripts/test`, `./scripts/fuzz`, `./scripts/lint`, and
 `./scripts/check-secrets` before requesting review. The secret check requires
