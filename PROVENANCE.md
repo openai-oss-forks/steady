@@ -35,27 +35,28 @@ document records evidence, not a legal determination or release authorization.
 
 ## Retained standards files
 
-The [machine-readable inventory](provenance/third-party.json) records each local
-file's SHA-256, its immutable upstream source, the upstream SHA-256, and any
-changes. The source comparisons were checked against parsed JSON as well as
-exact bytes where applicable.
+The [machine-readable inventory](provenance/third-party.json) records the
+retained OpenAPI schema's SHA-256, immutable upstream source, upstream SHA-256,
+and changes. The source comparison was checked against parsed JSON.
 
-| Local files                                                                                              | Official source                                                                                                                                         | License and changes                                                                  |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `packages/json-schema/spec/schema`                                                                       | [JSON Schema `schema.json` at `add836e`](https://github.com/json-schema-org/json-schema-spec/blob/add836e705c9a07434c467b6b90946ba45258a73/schema.json) | BSD-3-Clause option; byte-identical                                                  |
-| `packages/json-schema/spec/{applicator,content,core,format-annotation,meta-data,unevaluated,validation}` | [JSON Schema `meta/` at `add836e`](https://github.com/json-schema-org/json-schema-spec/tree/add836e705c9a07434c467b6b90946ba45258a73/meta)              | BSD-3-Clause option; root `$vocabulary` annotations omitted, with formatting changes |
-| `packages/openapi/schemas/openapi-3.1.json`                                                              | [OpenAPI schema at `157a4c81`](https://github.com/OAI/OpenAPI-Specification/blob/157a4c81ae537ef793b2bee368bc00d88b461de8/schemas/v3.1/schema.json)     | Apache-2.0; added HTTP `query` operation and formatting changes                      |
-
-The JSON Schema license text comes from the project's
-[explicit license clarification](https://github.com/json-schema-org/json-schema-spec/blob/51326f80900357fe3069beb4f5f575db24c1b9a7/LICENSE)
-and is preserved in [licenses/JSON-Schema.txt](licenses/JSON-Schema.txt). The
-OpenAPI license is preserved from the same pinned source revision in
-[licenses/OpenAPI.txt](licenses/OpenAPI.txt). The QUERY extension came from
+`packages/openapi/schemas/openapi-3.1.json` comes from the
+[official OpenAPI schema at `157a4c81`](https://github.com/OAI/OpenAPI-Specification/blob/157a4c81ae537ef793b2bee368bc00d88b461de8/schemas/v3.1/schema.json).
+It is licensed under Apache-2.0 and differs by the addition of the HTTP `query`
+operation and formatting changes. The license from that pinned revision is
+preserved in [licenses/OpenAPI.txt](licenses/OpenAPI.txt). The QUERY extension
+came from
 [upstream Steady commit `baf0e53f`](https://github.com/dgellow/steady/commit/baf0e53f39e8da80c553bd8e08eba958fa43dca2).
 Attribution and modification notices are collected in [NOTICE](NOTICE).
 
+The unused JSON Schema 2020-12 meta-schema copies and their reference directory
+were removed from the current tree. Earlier commits still contain those files;
+this cleanup does not rewrite history. Their original source and license records
+remain available in
+[commit `e791160`](https://github.com/openai/steady/tree/e7911609576a0828c6234f374634d00322fb39b5).
 The two upstream JSON Schema HTML placeholders contained no specification text
-and have been removed. Runtime and test dependencies are resolved separately
-from the exact versions and integrity hashes in [deno.lock](deno.lock); their
-source code is not vendored in this snapshot. Any future binary or package
-distribution must review and include the notices required for what it bundles.
+and were also removed.
+
+Runtime and test dependencies are resolved separately from the exact versions
+and integrity hashes in [deno.lock](deno.lock); their source code is not
+vendored in this snapshot. Any future binary or package distribution must review
+and include the notices required for what it bundles.
