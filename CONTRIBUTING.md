@@ -1,9 +1,9 @@
 # Contributing
 
-The [SDK maintainers](https://github.com/orgs/openai/teams/sdks-team) review and
-approve changes to this source-only snapshot. Every change to `main` requires a
-pull request and SDK-team approval; [CODEOWNERS](.github/CODEOWNERS) covers the
-entire repository. Direct pushes, force-pushes, and branch deletion are blocked.
+The maintainers listed in [CODEOWNERS](.github/CODEOWNERS) review and approve
+changes to this source-only snapshot. Every change to `main` requires a pull
+request and maintainer approval; CODEOWNERS covers the entire repository. Direct
+pushes, force-pushes, and branch deletion are blocked.
 Open a small change with a clear reason, focused regression tests, and local
 validation results. Use synthetic fixtures; do not add vendor corpora, private
 keys, real credentials, production requests, or unreviewed generated assets.

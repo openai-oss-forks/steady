@@ -1,2 +1,3 @@
-# Require SDK maintainer review for every change, including this file.
-* @openai/sdks-team
+# Require maintainer review for every change, including this file.
+# Owners must have accepted repository access with Write permission or higher.
+* @apcha-oai @jbeckwith-oai @dpiet-oai @jamieb-oai @GrantBirki
