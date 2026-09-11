@@ -684,3 +684,22 @@ Deno.test("multipart value constraints and binary alternatives preserve decoder 
     });
   }
 });
+
+Deno.test("multipart nullable root alternatives retain property inference", () => {
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const object = {
+      type: "object" as const,
+      properties: { payload: { type: "object" as const } },
+    };
+    const nullable = { type: "null" as const };
+    for (const branches of [[object, nullable], [nullable, object]]) {
+      assertEquals(
+        resolvePartContentTypes(
+          { schema: { [keyword]: branches } },
+          registryWith({}),
+        ),
+        { payload: JSON_ESSENCE },
+      );
+    }
+  }
+});

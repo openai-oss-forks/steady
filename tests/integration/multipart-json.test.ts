@@ -336,3 +336,65 @@ Deno.test("multipart composed items and value constraints decode request values"
     if (!isParseError(result)) assertEquals(result.body, { payload: value });
   }
 });
+
+Deno.test("multipart nullable root schemas decode and validate JSON fields", async () => {
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const { spec } = await parseSpec(JSON.stringify({
+      openapi: "3.1.0",
+      info: { title: "Nullable multipart root", version: "1" },
+      paths: {
+        "/upload": {
+          post: {
+            requestBody: {
+              required: true,
+              content: {
+                "multipart/form-data": {
+                  schema: {
+                    [keyword]: [{ type: "null" }, {
+                      type: "object",
+                      required: ["payload"],
+                      properties: {
+                        payload: {
+                          type: "object",
+                          required: ["id"],
+                          properties: { id: { type: "string" } },
+                        },
+                      },
+                    }],
+                  },
+                },
+              },
+            },
+            responses: { "201": { description: "Created" } },
+          },
+        },
+      },
+    }));
+    const server = new MockServer(spec, {
+      host: "127.0.0.1",
+      port: 0,
+      logLevel: "summary",
+      quiet: true,
+    });
+    const port = await server.start();
+    try {
+      for (
+        const [value, status] of [[{ id: "ok" }, 201], [
+          { id: 42 },
+          400,
+        ]] as const
+      ) {
+        const form = new FormData();
+        form.set("payload", JSON.stringify(value));
+        const response = await fetch(`http://127.0.0.1:${port}/upload`, {
+          method: "POST",
+          body: form,
+        });
+        const body = await response.text();
+        assertEquals(response.status, status, body);
+      }
+    } finally {
+      await server.stop();
+    }
+  }
+});

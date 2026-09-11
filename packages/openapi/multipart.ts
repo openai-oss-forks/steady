@@ -119,10 +119,17 @@ function propertyConstraints(root: Schema): Record<string, Schema> {
       members.push(property);
       contributions.set(name, members);
     }
-    // Only conjunctions contribute unconditional constraints. Root alternatives
-    // may give the same field incompatible types; choosing one parser would
-    // corrupt valid values from another branch (for example the string "null").
     pending.push(...schema.allOf ?? []);
+    // A parsed multipart body is an object. Ignore alternatives that cannot
+    // accept an object (notably null), but never choose between object branches
+    // that may give the same property incompatible types.
+    for (const key of ["anyOf", "oneOf"] as const) {
+      const objects = schema[key]?.filter((member) => {
+        const types = inferredTypes(member, false);
+        return !types || types.has("object");
+      });
+      if (objects?.length === 1) pending.push(objects[0]!);
+    }
   }
   // This is only a shape-inference view; validation uses the original schema.
   return Object.fromEntries(
