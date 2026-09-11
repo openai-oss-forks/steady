@@ -194,7 +194,7 @@ function inferredItems(schema: Schema): Schema | null {
   for (const key of ["anyOf", "oneOf"] as const) {
     if (!schema[key]) continue;
     const arrays = schema[key].filter((member) => {
-      const types = inferredTypes(member);
+      const types = inferredTypes(member, false);
       return !types || types.has("array");
     });
     if (arrays.length) {
@@ -215,7 +215,7 @@ function valueType(value: unknown): string {
 }
 
 /** Infer possible types, preserving intersections and alternatives separately. */
-function inferredTypes(schema: Schema): Set<string> | null {
+function inferredTypes(schema: Schema, allowHints = true): Set<string> | null {
   const local = {
     ...schema,
     allOf: undefined,
@@ -242,20 +242,28 @@ function inferredTypes(schema: Schema): Set<string> | null {
     constrain(new Set([valueType(schema.const)]));
   }
   if (schema.enum) constrain(new Set(schema.enum.map(valueType)));
-  if (!types) {
-    const hint = effectiveType(local) ??
-      (isObjectSchema(local) ? "object" : null);
-    if (hint) types = new Set([normalizeType(hint)]);
+  for (const member of schema.allOf ?? []) {
+    constrain(inferredTypes(member, false));
   }
-  for (const member of schema.allOf ?? []) constrain(inferredTypes(member));
   for (const key of ["anyOf", "oneOf"] as const) {
     if (!schema[key]) continue;
-    const alternatives = schema[key].map(inferredTypes);
+    const alternatives = schema[key].map((member) =>
+      inferredTypes(member, false)
+    );
     // An unconstrained alternative can have any type. It cannot justify decoding.
     if (alternatives.some((alternative) => alternative === null)) continue;
     constrain(
       new Set(alternatives.flatMap((alternative) => [...alternative!])),
     );
+  }
+  // Structural keywords apply only to values of the corresponding type; they
+  // cannot narrow explicit types or override a constant in another allOf branch.
+  // Use conventional object/array hints only when hard constraints are absent.
+  if (types === null && allowHints) {
+    const hint = effectiveType(local) ??
+      (isObjectSchema(local) ? "object" : null);
+    if (hint) constrain(new Set([normalizeType(hint)]));
+    for (const member of schema.allOf ?? []) constrain(inferredTypes(member));
   }
   return types;
 }

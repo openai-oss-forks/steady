@@ -582,8 +582,14 @@ Deno.test("multipart item constraints are independent of composition order", asy
     ["type first", { allOf: [objects, refinement] }, JSON_ESSENCE],
     ["direct refinement", { ...refinement, allOf: [objects] }, JSON_ESSENCE],
     ["nullable array", {
-      anyOf: [{ type: "null" }, { allOf: [refinement, objects] }],
+      anyOf: [{ type: "null" }, {
+        type: "array",
+        allOf: [refinement, objects],
+      }],
     }, JSON_ESSENCE],
+    ["untyped nullable array remains ambiguous", {
+      anyOf: [{ type: "null" }, { allOf: [refinement, objects] }],
+    }, undefined],
     ["mixed array alternatives", {
       anyOf: [objects, { items: { type: "string" } }],
     }, undefined],
@@ -625,6 +631,19 @@ Deno.test("multipart value constraints and binary alternatives preserve decoder 
       OCTET_STREAM_ESSENCE,
     ],
     ["object constant", { const: { id: 1 } }, JSON_ESSENCE],
+    ["composed constant with structural hint", {
+      allOf: [{ const: "null" }, { properties: { id: {} } }],
+    }, TEXT_PLAIN_ESSENCE],
+    ["composed enum with structural hint", {
+      allOf: [{ enum: ["null", "auto"] }, { properties: { id: {} } }],
+    }, TEXT_PLAIN_ESSENCE],
+    ["structural hint with explicit alternatives", {
+      properties: { id: {} },
+      anyOf: [{ type: "string" }, { type: "object" }],
+    }, undefined],
+    ["structural alternative remains unconstrained", {
+      anyOf: [{ properties: { id: {} } }, { type: "object" }],
+    }, undefined],
     ["object enum", { enum: [{ id: 1 }, { id: 2 }] }, JSON_ESSENCE],
     ["string constant", { const: "null" }, TEXT_PLAIN_ESSENCE],
     ["string enum", { enum: ["null", "auto"] }, TEXT_PLAIN_ESSENCE],
