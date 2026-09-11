@@ -287,10 +287,6 @@ function createSSEFromExample(
       const event = events[index];
       if (event) yield formatSSEEvent(event, index);
     }
-    const last = events[events.length - 1]?.event?.toLowerCase();
-    if (last !== "done" && last !== "complete" && last !== "end") {
-      yield "event: done\ndata: {}\n\n";
-    }
   }
   return createTimedStream(
     chunks(),
@@ -376,6 +372,7 @@ function createStreamFromSchema(
   const count = options.count ?? DEFAULT_STREAM_COUNT;
   const generatorOptions = options.generatorOptions ?? {};
   const baseSeed = generatorOptions.seed ?? 123456789;
+  const discriminator = streamDiscriminator(schema, registry);
   function* chunks(): Generator<string> {
     for (let index = 0; index < count; index++) {
       const generator = new RegistryResponseGenerator(registry, {
@@ -392,14 +389,42 @@ function createStreamFromSchema(
         item = generator.generateFromSchema(schema, schemaPointer);
       }
       checkGeneratedValue(item);
-      yield formatSchemaStreamItem(item, format, index, count);
+      yield formatSchemaStreamItem(item, format, index, count, discriminator);
     }
-    if (format === "sse") yield "event: done\ndata: {}\n\n";
   }
   return createTimedStream(
     chunks(),
     options.interval ?? DEFAULT_STREAM_INTERVAL,
   );
+}
+
+/** Resolve event metadata without guessing from ordinary payload field names. */
+function streamDiscriminator(
+  schema: Schema | boolean,
+  registry: SchemaRegistry,
+  seen = new Set<Schema>(),
+): string | undefined {
+  if (typeof schema === "boolean" || seen.has(schema) || seen.size >= 50) {
+    return undefined;
+  }
+  seen.add(schema);
+  if ("discriminator" in schema && schema.discriminator) {
+    return schema.discriminator.propertyName;
+  }
+  const candidates = new Set<string>();
+  if (schema.$ref) {
+    const resolved = registry.resolveRef(schema.$ref);
+    const name = resolved && streamDiscriminator(resolved.raw, registry, seen);
+    if (name) candidates.add(name);
+  }
+  for (const keyword of ["allOf", "oneOf", "anyOf"] as const) {
+    if (!(keyword in schema)) continue;
+    for (const member of schema[keyword] ?? []) {
+      const name = streamDiscriminator(member, registry, seen);
+      if (name) candidates.add(name);
+    }
+  }
+  return candidates.size === 1 ? candidates.values().next().value : undefined;
 }
 
 /**
@@ -410,11 +435,28 @@ function formatSchemaStreamItem(
   format: "ndjson" | "sse",
   index: number,
   total: number,
+  discriminator?: string,
 ): string {
   if (format === "sse") {
-    // For SSE, wrap in proper event format
-    const json = JSON.stringify(item);
-    return `id: ${index}\nevent: message\ndata: ${json}\n\n`;
+    let event = "message";
+    let data = item;
+    if (
+      discriminator && typeof item === "object" && item !== null &&
+      !Array.isArray(item) && Object.hasOwn(item, discriminator)
+    ) {
+      const record = item as Record<string, unknown>;
+      const name = record[discriminator];
+      if (typeof name === "string") {
+        if (/[\r\n\0]/.test(name)) throw new Error("Invalid SSE event name");
+        event = name;
+        // An event-discriminated envelope describes SSE fields; other
+        // discriminators (e.g. type or kind) remain part of the JSON payload.
+        if (discriminator === "event" && Object.hasOwn(record, "data")) {
+          data = record.data;
+        }
+      }
+    }
+    return `id: ${index}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   }
 
   // NDJSON format: add metadata and output as JSON line

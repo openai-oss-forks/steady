@@ -168,27 +168,24 @@ export function generateResponseFromObject(
     // Check if selected content type is streaming
     if (selectedContentType && isStreamingContentType(selectedContentType)) {
       const mediaType = responseObj.content[selectedContentType];
-      if (mediaType?.schema || mediaType?.example) {
+      if (mediaType && (mediaType.schema || mediaType.example !== undefined)) {
         // Pass example to streaming options for SSE event sequences
         if (mediaType.example !== undefined) {
           streamingOptions.example = mediaType.example;
         }
-        // Streaming responses need a schema to generate from
-        if (mediaType.schema) {
-          return {
-            response: generateStreamingResponse(
-              registry,
-              logger,
-              mediaType.schema,
-              pathPattern,
-              method,
-              statusCode,
-              selectedContentType,
-              streamingOptions,
-            ),
-            body: "[streaming]",
-          };
-        }
+        return {
+          response: generateStreamingResponse(
+            registry,
+            logger,
+            mediaType.schema ?? {},
+            pathPattern,
+            method,
+            statusCode,
+            selectedContentType,
+            streamingOptions,
+          ),
+          body: "[streaming]",
+        };
       }
     }
 
