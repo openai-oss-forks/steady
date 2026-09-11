@@ -190,8 +190,8 @@ Deno.test("createStreamingResponse: generates SSE stream", async () => {
   assertStringIncludes(fullText, "id: 0");
   assertStringIncludes(fullText, "event: message");
   assertStringIncludes(fullText, "data: {");
-  // Should end with done event
-  assertStringIncludes(fullText, "event: done");
+  // Closing the stream must not invent an extra event.
+  assertEquals(fullText.includes("event: done"), false);
 });
 
 Deno.test("createStreamingResponse: uses deterministic seeds", async () => {
@@ -369,7 +369,7 @@ Deno.test("createStreamingResponse: SSE with example event sequence", async () =
   assertEquals(doneMatches, null);
 });
 
-Deno.test("createStreamingResponse: SSE adds done event if missing", async () => {
+Deno.test("createStreamingResponse: SSE closes after the supplied events", async () => {
   const doc = { type: "object" } satisfies Schema;
   const registry = SchemaRegistry.fromSpec({ schema: doc });
 
@@ -396,8 +396,7 @@ Deno.test("createStreamingResponse: SSE adds done event if missing", async () =>
     fullText += decoder.decode(value);
   }
 
-  // Should have auto-added done event since last wasn't done/complete/end
-  assertStringIncludes(fullText, "event: done");
+  assertEquals(fullText.includes("event: done"), false);
 });
 
 Deno.test("createStreamingResponse: SSE supports custom event IDs", async () => {
@@ -461,7 +460,7 @@ Deno.test("createStreamingResponse: SSE supports retry field", async () => {
   assertStringIncludes(fullText, "retry: 5000");
 });
 
-Deno.test("createStreamingResponse: SSE schema-based adds done event", async () => {
+Deno.test("createStreamingResponse: SSE schema-based closes without an extra event", async () => {
   const doc = {
     type: "object",
     properties: { value: { type: "integer" } },
@@ -486,8 +485,7 @@ Deno.test("createStreamingResponse: SSE schema-based adds done event", async () 
     fullText += decoder.decode(value);
   }
 
-  // Schema-based SSE should end with done event
-  assertStringIncludes(fullText, "event: done\ndata: {}");
+  assertEquals(fullText.includes("event: done"), false);
 });
 
 // NDJSON Example Tests

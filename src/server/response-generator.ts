@@ -166,29 +166,39 @@ export function generateResponseFromObject(
     }
 
     // Check if selected content type is streaming
-    if (selectedContentType && isStreamingContentType(selectedContentType)) {
+    if (
+      selectedContentType && isStreamingContentType(selectedContentType) &&
+      !NULL_BODY_STATUS_STRINGS.has(statusCode)
+    ) {
       const mediaType = responseObj.content[selectedContentType];
-      if (mediaType?.schema || mediaType?.example) {
+      let example = mediaType?.example;
+      if (example === undefined && mediaType?.examples) {
+        const first = Object.values(mediaType.examples)[0];
+        if (first && isReference(first)) {
+          const resolved = specDoc.resolveRef(first.$ref);
+          if (isPlainObject(resolved)) example = resolved.value;
+        } else {
+          example = first?.value;
+        }
+      }
+      if (mediaType && (mediaType.schema || example !== undefined)) {
         // Pass example to streaming options for SSE event sequences
-        if (mediaType.example !== undefined) {
-          streamingOptions.example = mediaType.example;
+        if (example !== undefined) {
+          streamingOptions.example = example;
         }
-        // Streaming responses need a schema to generate from
-        if (mediaType.schema) {
-          return {
-            response: generateStreamingResponse(
-              registry,
-              logger,
-              mediaType.schema,
-              pathPattern,
-              method,
-              statusCode,
-              selectedContentType,
-              streamingOptions,
-            ),
-            body: "[streaming]",
-          };
-        }
+        return {
+          response: generateStreamingResponse(
+            registry,
+            logger,
+            mediaType.schema ?? {},
+            pathPattern,
+            method,
+            statusCode,
+            selectedContentType,
+            streamingOptions,
+          ),
+          body: "[streaming]",
+        };
       }
     }
 

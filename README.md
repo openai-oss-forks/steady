@@ -355,8 +355,21 @@ SSE events support these fields:
 - `id` - Custom event ID (auto-generated if omitted; set to `null` to omit)
 - `retry` - Reconnection timeout in milliseconds
 
-If the last event isn't `done`, `complete`, or `end`, Steady automatically
-appends a `done` event to signal stream completion.
+Steady closes the stream after the supplied events. It does not append a
+synthetic completion event: an extra `{}` payload would not satisfy most typed
+event schemas. Include any protocol-specific terminal event in the example.
+
+For schema-generated SSE, Steady resolves `discriminator.propertyName` through
+references and composition and uses the generated discriminator value as the SSE
+event name. A discriminator named `event` with a `data` property describes an
+SSE envelope: only that `data` value is serialized into the SSE data field.
+Other discriminators, such as `type`, remain in the JSON payload. Schemas
+without a discriminator keep the default `message` event name.
+
+Schema generation produces independent sample events, not a stateful protocol
+conversation. Use an explicit event-sequence example when testing lifecycle or
+accumulation behavior. For endpoints offering both JSON and SSE, request
+`Accept: text/event-stream` to select the streaming response.
 
 ### OpenAI-Style SSE
 
