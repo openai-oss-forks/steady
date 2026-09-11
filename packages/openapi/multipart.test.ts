@@ -631,6 +631,14 @@ Deno.test("multipart value constraints and binary alternatives preserve decoder 
       OCTET_STREAM_ESSENCE,
     ],
     ["object constant", { const: { id: 1 } }, JSON_ESSENCE],
+    ["local hint with unconstrained alternative", {
+      properties: { id: {} },
+      anyOf: [{}, { type: "object" }],
+    }, undefined],
+    ["local hint with nested unconstrained alternative", {
+      properties: { id: {} },
+      allOf: [{ anyOf: [{}, { type: "object" }] }],
+    }, undefined],
     ["composed constant with structural hint", {
       allOf: [{ const: "null" }, { properties: { id: {} } }],
     }, TEXT_PLAIN_ESSENCE],

@@ -293,6 +293,11 @@ Deno.test("multipart composed items and value constraints decode request values"
     [{ const: { id: 1 } }, { id: 1 }, false],
     [{ enum: [{ id: 1 }, { id: 2 }] }, { id: 2 }, false],
     [{ const: "null" }, "null", true],
+    [
+      { properties: { id: {} }, anyOf: [{}, { type: "object" }] },
+      "null",
+      false,
+    ],
     [{ allOf: [{ const: "null" }, { properties: { id: {} } }] }, "null", true],
     [
       { allOf: [{ enum: ["null", "auto"] }, { properties: { id: {} } }] },

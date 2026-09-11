@@ -215,6 +215,11 @@ function valueType(value: unknown): string {
 }
 
 /** Infer possible types, preserving intersections and alternatives separately. */
+function hasAlternatives(schema: Schema): boolean {
+  return schema.anyOf !== undefined || schema.oneOf !== undefined ||
+    (schema.allOf?.some(hasAlternatives) ?? false);
+}
+
 function inferredTypes(schema: Schema, allowHints = true): Set<string> | null {
   const local = {
     ...schema,
@@ -259,7 +264,7 @@ function inferredTypes(schema: Schema, allowHints = true): Set<string> | null {
   // Structural keywords apply only to values of the corresponding type; they
   // cannot narrow explicit types or override a constant in another allOf branch.
   // Use conventional object/array hints only when hard constraints are absent.
-  if (types === null && allowHints) {
+  if (types === null && allowHints && !hasAlternatives(schema)) {
     const hint = effectiveType(local) ??
       (isObjectSchema(local) ? "object" : null);
     if (hint) constrain(new Set([normalizeType(hint)]));
