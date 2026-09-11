@@ -146,24 +146,65 @@ function implicitEssence(
 
   if (isBinaryByEncoding(resolved)) return OCTET_STREAM_ESSENCE;
 
-  if (isObjectSchema(resolved) || effectiveType(resolved) === "object") {
-    return JSON_ESSENCE;
+  const types = inferredTypes(resolved);
+  if (!types) return null;
+  types.delete("null");
+  const essences = new Set<MediaTypeEssence>();
+  for (const type of types) {
+    if (type === "object") essences.add(JSON_ESSENCE);
+    else if (type === "array") {
+      const items = effectiveItems(resolved);
+      const itemTypes = items ? inferredTypes(items) : null;
+      if (!items || !itemTypes || itemTypes.size === 0) return null;
+      if (itemTypes.size > 1) itemTypes.delete("null");
+      if (isBinaryByEncoding(items)) essences.add(OCTET_STREAM_ESSENCE);
+      else {
+        for (const itemType of itemTypes) {
+          essences.add(
+            itemType === "object" || itemType === "array"
+              ? JSON_ESSENCE
+              : TEXT_PLAIN_ESSENCE,
+          );
+        }
+      }
+    } else essences.add(TEXT_PLAIN_ESSENCE);
   }
+  // A field accepting both strings/files and objects has no unambiguous
+  // default decoder. In particular, the literal string "null" must stay a string.
+  return essences.size === 1 ? [...essences][0]! : null;
+}
 
-  if (effectiveType(resolved) === "array") {
-    const itemSchema = effectiveItems(resolved);
-    if (!itemSchema) return null;
-    if (isBinaryByEncoding(itemSchema)) return OCTET_STREAM_ESSENCE;
-    // OAS 3.1: "array of primitives" -> text/plain. Anything else
-    // (array of objects, array of arrays, array of composition
-    // values) is a complex value -> application/json.
-    const itemType = effectiveType(itemSchema);
-    if (itemType === "object" || itemType === "array") return JSON_ESSENCE;
-    if (isObjectSchema(itemSchema)) return JSON_ESSENCE;
-    return itemType ? TEXT_PLAIN_ESSENCE : null;
+/** Infer possible types, preserving intersections and alternatives separately. */
+function inferredTypes(schema: Schema): Set<string> | null {
+  const local = {
+    ...schema,
+    allOf: undefined,
+    anyOf: undefined,
+    oneOf: undefined,
+  };
+  const localType = schema.type ?? effectiveType(local) ??
+    (isObjectSchema(local) ? "object" : null);
+  let types: Set<string> | null = localType
+    ? new Set(Array.isArray(localType) ? localType : [localType])
+    : null;
+  const constrain = (constraint: Set<string> | null) => {
+    if (constraint) {
+      types = types
+        ? new Set([...types].filter((type) => constraint.has(type)))
+        : constraint;
+    }
+  };
+  for (const member of schema.allOf ?? []) constrain(inferredTypes(member));
+  for (const key of ["anyOf", "oneOf"] as const) {
+    if (!schema[key]) continue;
+    const alternatives = schema[key].map(inferredTypes);
+    // An unconstrained alternative can have any type. It cannot justify decoding.
+    if (alternatives.some((alternative) => alternative === null)) continue;
+    constrain(
+      new Set(alternatives.flatMap((alternative) => [...alternative!])),
+    );
   }
-
-  return effectiveType(resolved) ? TEXT_PLAIN_ESSENCE : null;
+  return types;
 }
 
 /**

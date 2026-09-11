@@ -545,3 +545,27 @@ Deno.test("multipart inference bounds repeated acyclic references", () => {
     `Performed ${resolutions} reference resolutions`,
   );
 });
+
+Deno.test("multipart nullable object arrays and constrained unions retain JSON inference", () => {
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: {
+        values: {
+          type: "array",
+          items: { anyOf: [{ type: "object" }, { type: "null" }] },
+        },
+        narrowed: {
+          type: "object",
+          allOf: [{ anyOf: [{ type: "string" }, { type: "object" }] }],
+        },
+        closed: { additionalProperties: false },
+      },
+    },
+  };
+  assertEquals(resolvePartContentTypes(mediaType, registryWith({})), {
+    values: JSON_ESSENCE,
+    narrowed: JSON_ESSENCE,
+    closed: JSON_ESSENCE,
+  });
+});

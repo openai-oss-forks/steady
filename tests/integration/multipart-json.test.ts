@@ -228,3 +228,43 @@ Deno.test("multipart unions keep plain string and file alternatives", async () =
     assertEquals(result.body, { strategy: "auto", video: "[File]" });
   }
 });
+
+Deno.test("referenced multipart unions do not decode literal strings or JSON file bytes", async () => {
+  const registry = SchemaRegistry.fromSpec({
+    openapi: "3.1.0",
+    info: { title: "Union regression", version: "1" },
+    paths: {},
+    components: {
+      schemas: {
+        Mixed: { anyOf: [{ type: "string" }, { type: "object" }] },
+        FileOrObject: {
+          oneOf: [{ type: "string", format: "binary" }, { type: "object" }],
+        },
+      },
+    },
+  });
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: {
+        payload: { allOf: [{ $ref: "#/components/schemas/Mixed" }] },
+        upload: { allOf: [{ $ref: "#/components/schemas/FileOrObject" }] },
+      },
+    },
+  };
+  const form = new FormData();
+  form.set("payload", "null");
+  form.set(
+    "upload",
+    new File(['{"key":"value"}'], "data.json", { type: "application/json" }),
+  );
+  const result = await parseRequestBody(
+    new Request("http://localhost", { method: "POST", body: form }),
+    null,
+    { partContentTypes: resolvePartContentTypes(mediaType, registry) },
+  );
+  assertEquals(isParseError(result), false);
+  if (!isParseError(result)) {
+    assertEquals(result.body, { payload: "null", upload: "[File]" });
+  }
+});
