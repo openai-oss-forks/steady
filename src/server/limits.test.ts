@@ -1,5 +1,10 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { loopbackHost, readLimitedBody, RequestLimitError } from "./limits.ts";
+import {
+  drainLimitedBody,
+  loopbackHost,
+  readLimitedBody,
+  RequestLimitError,
+} from "./limits.ts";
 import { getEffectiveGeneratorOptions } from "./options.ts";
 import { MockServer } from "./mod.ts";
 import { parseSpecFromFile } from "@steady/openapi";
@@ -150,4 +155,167 @@ Deno.test({
       await server.stop();
     }
   },
+});
+
+Deno.test("draining consumes uploads without buffering and preserves read limits", async () => {
+  let consumed = 0;
+  const chunk = new Uint8Array(1024);
+  await drainLimitedBody(
+    new Request("http://localhost", {
+      method: "POST",
+      body: new ReadableStream({
+        pull(controller) {
+          if (consumed++ < 256) controller.enqueue(chunk);
+          else controller.close();
+        },
+      }),
+    }),
+    256 * chunk.byteLength,
+  );
+  assertEquals(consumed, 257);
+  for (const declared of [false, true]) {
+    let cancelled = false;
+    const req = new Request("http://localhost", {
+      method: "POST",
+      headers: declared ? { "content-length": "6" } : {},
+      body: new ReadableStream({
+        start(c) {
+          c.enqueue(new Uint8Array(3));
+          c.enqueue(new Uint8Array(3));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+    });
+    const error = await assertRejects(
+      () => drainLimitedBody(req, 5),
+      RequestLimitError,
+    );
+    assertEquals(error.status, 413);
+    assertEquals(cancelled, true);
+    assertEquals(req.body?.locked, false);
+  }
+  let cancelled = false;
+  const stalled = new Request("http://localhost", {
+    method: "POST",
+    body: new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+    }),
+  });
+  const error = await assertRejects(
+    () => drainLimitedBody(stalled, 5, 1),
+    RequestLimitError,
+  );
+  assertEquals(error.status, 408);
+  assertEquals(cancelled, true);
+  assertEquals(stalled.body?.locked, false);
+});
+
+Deno.test("routing errors retain body size limits", async () => {
+  const { spec } = await parseSpecFromFile(
+    "tests/specs/synthetic-service.yaml",
+  );
+  const server = new MockServer(spec, { ...config, maxRequestBodyBytes: 128 });
+  const port = await server.start();
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/missing`, {
+      method: "POST",
+      body: "x".repeat(256),
+    });
+    assertEquals(response.status, 413);
+    assertEquals(response.headers.get("x-steady-error-1-code"), "E3024");
+    await response.text();
+    const ordinary = await fetch(`http://127.0.0.1:${port}/missing`, {
+      method: "POST",
+      body: "small",
+    });
+    assertEquals(ordinary.status, 404);
+    assertEquals(ordinary.headers.get("x-steady-error-1-code"), "E2001");
+    await ordinary.text();
+  } finally {
+    await server.stop();
+  }
+});
+
+Deno.test("draining releases errored request streams", async () => {
+  const req = new Request("http://localhost", {
+    method: "POST",
+    body: new ReadableStream({
+      start(c) {
+        c.error(new Error("synthetic upload failure"));
+      },
+    }),
+  });
+  await assertRejects(
+    () => drainLimitedBody(req),
+    Error,
+    "synthetic upload failure",
+  );
+  assertEquals(req.body?.locked, false);
+});
+
+Deno.test("unsupported methods retain upload diagnostics and session outcomes", async () => {
+  const { spec } = await parseSpecFromFile(
+    "tests/specs/synthetic-service.yaml",
+  );
+  const server = new MockServer(spec, { ...config, maxRequestBodyBytes: 128 });
+  const port = await server.start();
+  try {
+    for (
+      const [body, status, code] of [["small", 405, "E2002"], [
+        "x".repeat(256),
+        413,
+        "E3024",
+      ]] as const
+    ) {
+      const response = await fetch(`http://127.0.0.1:${port}/missing`, {
+        method: "PROPFIND",
+        body,
+        headers: { "X-Steady-Session": "rejected-method" },
+      });
+      assertEquals(response.status, status);
+      assertEquals(response.headers.get("x-steady-error-1-code"), code);
+      await response.text();
+    }
+    const response = await fetch(
+      `http://127.0.0.1:${port}/_x-steady/sessions/rejected-method`,
+    );
+    const report = await response.json();
+    assertEquals(report.requests, 2);
+    assertEquals(report.summary, { total: 2, valid: 0, invalid: 2 });
+    assertEquals(
+      report.sdk_issues.some((issue: { code: string }) =>
+        issue.code === "E3024"
+      ),
+      true,
+    );
+  } finally {
+    await server.stop();
+  }
+});
+
+Deno.test("rejected upload stream failures are body errors, not limit errors", async () => {
+  const { spec } = await parseSpecFromFile(
+    "tests/specs/synthetic-service.yaml",
+  );
+  const server = new MockServer(spec, config);
+  for (const path of ["/missing", "/_x-steady/health"]) {
+    const request = new Request(`http://localhost${path}`, {
+      method: "POST",
+      body: new ReadableStream({
+        start(controller) {
+          controller.error(new Error("private transport detail"));
+        },
+      }),
+    });
+    // Inject a failed transport stream directly: fetch cannot send one to a server.
+    const response = await server["handleRequest"](request);
+    assertEquals(response.status, 400);
+    assertEquals(response.headers.get("x-steady-error-1-code"), "E3021");
+    assertEquals((await response.json()).error, "Failed to read request body");
+    assertEquals(request.body?.locked, false);
+  }
 });
