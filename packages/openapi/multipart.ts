@@ -21,6 +21,7 @@
 
 import {
   effectiveItems,
+  effectiveProperties,
   effectiveType,
   isObjectSchema,
   type Schema,
@@ -31,7 +32,6 @@ import {
   isJsonMediaType,
   type MediaTypeEssence,
 } from "@steady/media-type";
-import { isReference } from "./openapi.ts";
 import type {
   MediaTypeObject,
   ReferenceObject,
@@ -69,17 +69,18 @@ export function resolvePartContentTypes(
 ): Record<string, MediaTypeEssence> {
   const result: Record<string, MediaTypeEssence> = {};
 
-  const rootSchema = dereference(mediaType.schema, registry);
+  const rootSchema = resolveForInference(mediaType.schema, registry);
+  const properties = rootSchema ? effectiveProperties(rootSchema) : null;
   const names = new Set<string>();
-  if (rootSchema?.properties) {
-    for (const name of Object.keys(rootSchema.properties)) names.add(name);
+  if (properties) {
+    for (const name of Object.keys(properties)) names.add(name);
   }
   if (mediaType.encoding) {
     for (const name of Object.keys(mediaType.encoding)) names.add(name);
   }
 
   for (const name of names) {
-    const propSchema = rootSchema?.properties?.[name];
+    const propSchema = properties?.[name];
     const implicit = implicitEssence(propSchema, registry);
 
     const explicitRaw = mediaType.encoding?.[name]?.contentType;
@@ -119,7 +120,7 @@ function implicitEssence(
   propSchema: Schema | ReferenceObject | undefined,
   registry: SchemaRegistry,
 ): MediaTypeEssence | null {
-  const resolved = dereference(propSchema, registry);
+  const resolved = resolveForInference(propSchema, registry);
   if (!resolved) return null;
 
   if (isBinaryByEncoding(resolved)) return OCTET_STREAM_ESSENCE;
@@ -130,8 +131,8 @@ function implicitEssence(
 
   if (effectiveType(resolved) === "array") {
     const items = effectiveItems(resolved);
-    const itemSchema = dereference(items ?? undefined, registry);
-    if (!itemSchema) return TEXT_PLAIN_ESSENCE;
+    const itemSchema = items;
+    if (!itemSchema) return null;
     if (isBinaryByEncoding(itemSchema)) return OCTET_STREAM_ESSENCE;
     // OAS 3.1: "array of primitives" -> text/plain. Anything else
     // (array of objects, array of arrays, array of composition
@@ -139,10 +140,10 @@ function implicitEssence(
     const itemType = effectiveType(itemSchema);
     if (itemType === "object" || itemType === "array") return JSON_ESSENCE;
     if (isObjectSchema(itemSchema)) return JSON_ESSENCE;
-    return TEXT_PLAIN_ESSENCE;
+    return itemType ? TEXT_PLAIN_ESSENCE : null;
   }
 
-  return TEXT_PLAIN_ESSENCE;
+  return effectiveType(resolved) ? TEXT_PLAIN_ESSENCE : null;
 }
 
 /**
@@ -150,23 +151,50 @@ function implicitEssence(
  * raw bytes. Either triggers `application/octet-stream` per OAS 3.1.
  */
 function isBinaryByEncoding(schema: Schema): boolean {
-  return schema.format === "binary" || schema.contentEncoding !== undefined;
+  return schema.format === "binary" || schema.contentEncoding !== undefined ||
+    (schema.allOf?.some(isBinaryByEncoding) ?? false);
 }
 
 /**
- * Follow a `$ref` through the registry to its target schema. Inline
- * schemas pass through unchanged. Returns undefined when the target
- * does not resolve to a schema object (e.g. a boolean schema or a
- * dangling reference).
+ * Resolve only the shape needed by the schema inspection helpers: references,
+ * composition, and items. Do not expand object properties (which can recurse).
+ * Unknown or cyclic references stay unknown rather than becoming text/plain.
+ * The returned copy never changes the registry's validation schemas.
  */
-function dereference(
+function resolveForInference(
   value: SchemaObject | ReferenceObject | undefined,
   registry: SchemaRegistry,
+  ancestors = new Set<SchemaObject>(),
 ): SchemaObject | undefined {
-  if (!value) return undefined;
-  if (!isReference(value)) return value;
-  const resolved = registry.resolveRef(value.$ref);
-  if (!resolved) return undefined;
-  if (typeof resolved.raw === "boolean") return undefined;
-  return resolved.raw;
+  if (
+    !value || typeof value === "boolean" || ancestors.has(value) ||
+    ancestors.size >= 50
+  ) {
+    return undefined;
+  }
+  ancestors.add(value);
+  try {
+    const { $ref, ...schema } = value as SchemaObject;
+    for (const key of ["allOf", "anyOf", "oneOf"] as const) {
+      if (schema[key]) {
+        schema[key] = schema[key].map((member) =>
+          resolveForInference(member, registry, ancestors) ?? {}
+        );
+      }
+    }
+    if (schema.items && !Array.isArray(schema.items)) {
+      schema.items = resolveForInference(schema.items, registry, ancestors) ??
+        {};
+    }
+    if ($ref) {
+      const target = registry.resolveRef($ref)?.raw;
+      const resolved = typeof target === "boolean"
+        ? undefined
+        : resolveForInference(target, registry, ancestors);
+      if (resolved) schema.allOf = [resolved, ...schema.allOf ?? []];
+    }
+    return schema;
+  } finally {
+    ancestors.delete(value);
+  }
 }

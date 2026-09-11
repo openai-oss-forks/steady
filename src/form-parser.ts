@@ -96,10 +96,11 @@ export async function parseFormData(
         if (bucket) bucket.push(parsed);
         else jsonBuckets.set(key, [parsed]);
       } catch {
-        // Malformed JSON for a part the spec said is JSON: let the
-        // kernel handle it as a normal entry. Validation downstream
-        // sees the type mismatch and reports it.
-        kernelEntries.push([key, value]);
+        // Report a decoding error instead of blaming the SDK for an object
+        // type mismatch, or accepting malformed JSON under a nullable union.
+        throw new SyntaxError(
+          `Invalid JSON in multipart field ${JSON.stringify(key)}`,
+        );
       }
       continue;
     }

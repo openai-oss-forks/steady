@@ -446,3 +446,58 @@ Deno.test("resolvePartContentTypes", async (t) => {
     assertEquals(resolvePartContentTypes(mt, registryWith({})), {});
   });
 });
+
+Deno.test("multipart inference resolves composition references without guessing strings", async (t) => {
+  const registry = registryWith({
+    Object: { type: "object", properties: { model: { type: "string" } } },
+    Alias: { $ref: "#/components/schemas/Object" },
+    Text: { type: "string" },
+    Cycle: { $ref: "#/components/schemas/Cycle" },
+  });
+  const ref = { $ref: "#/components/schemas/Alias" };
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["allOf reference", { allOf: [ref] }, JSON_ESSENCE],
+    [
+      "nested composition",
+      { allOf: [{ anyOf: [ref, { type: "null" }] }] },
+      JSON_ESSENCE,
+    ],
+    ["nullable oneOf", { oneOf: [{ type: "null" }, ref] }, JSON_ESSENCE],
+    ["nullable type", { type: ["object", "null"] }, JSON_ESSENCE],
+    [
+      "array of composed objects",
+      { type: "array", items: { allOf: [ref] } },
+      JSON_ESSENCE,
+    ],
+    [
+      "composed string",
+      { allOf: [{ $ref: "#/components/schemas/Text" }] },
+      TEXT_PLAIN_ESSENCE,
+    ],
+    ["unconstrained", {}, undefined],
+    ["unresolved composition", {
+      allOf: [{ $ref: "#/components/schemas/Missing" }],
+    }, undefined],
+    ["cyclic reference", { $ref: "#/components/schemas/Cycle" }, undefined],
+    ["unknown array items", { type: "array", items: {} }, undefined],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      const mediaType: MediaTypeObject = {
+        schema: { type: "object", properties: { session: schema } },
+      };
+      assertEquals(
+        resolvePartContentTypes(mediaType, registry),
+        expected ? { session: expected } : {},
+      );
+      mediaType.encoding = { session: { contentType: "application/json" } };
+      assertEquals(resolvePartContentTypes(mediaType, registry), {
+        session: expected ?? JSON_ESSENCE,
+      });
+    });
+  }
+});
