@@ -2,6 +2,7 @@ import { observeResponse } from "./outcome.ts";
 import { getCode } from "../codes/registry.ts";
 import {
   DEFAULT_MAX_BODY_BYTES,
+  drainLimitedBody,
   loopbackHost,
   RequestLimitError,
   validateBodyLimit,
@@ -233,6 +234,19 @@ export class MockServer {
     }
   }
 
+  private async drainRejectedBody(
+    req: Request,
+  ): Promise<RequestLimitError | undefined> {
+    try {
+      await drainLimitedBody(req, this.config.maxRequestBodyBytes);
+      return undefined;
+    } catch (error) {
+      return error instanceof RequestLimitError
+        ? error
+        : new RequestLimitError("Failed to read request body");
+    }
+  }
+
   private async handleRequest(req: Request): Promise<Response> {
     const startTime = performance.now();
     const url = new URL(req.url);
@@ -262,10 +276,14 @@ export class MockServer {
 
     // Validate HTTP method before any processing
     if (!isHttpMethod(rawMethod)) {
-      return new Response(`Method ${req.method} is not supported`, {
-        status: 405,
-        headers: { "Content-Type": "text/plain" },
-      });
+      const bodyError = await this.drainRejectedBody(req);
+      return new Response(
+        bodyError?.message ?? `Method ${req.method} is not supported`,
+        {
+          status: bodyError?.status ?? 405,
+          headers: { "Content-Type": "text/plain" },
+        },
+      );
     }
     const method = rawMethod;
 
@@ -280,12 +298,26 @@ export class MockServer {
     });
 
     if (!routeResult.matched) {
-      // Route not found or method not allowed
+      // Wait for ordinary uploads to finish before responding. Closing while
+      // clients are still writing can hide the HTTP error behind EPIPE.
+      const bodyError = await this.drainRejectedBody(req);
       const timing = Math.round(performance.now() - startTime);
       this.requestCount++;
       this.failedCount++;
 
-      const routeDiags = routeResult.diagnostics;
+      const routeDiags = [...routeResult.diagnostics];
+      if (bodyError) {
+        const definition = getCode("E3024");
+        routeDiags.unshift({
+          code: "E3024",
+          severity: definition.severity,
+          category: definition.category,
+          requestPath: "body",
+          specPointer: "",
+          message: bodyError.message,
+          attribution: { confidence: 1, reasoning: [] },
+        });
+      }
 
       // Collect runtime diagnostics
       this.collector.addRuntimeDiagnostics(
@@ -308,10 +340,8 @@ export class MockServer {
 
       // E2002 (method not allowed) -> 405, E2001 (path not found) -> 404
       const isMethodNotAllowed = routeDiags.some((d) => d.code === "E2002");
-      const status = isMethodNotAllowed ? 405 : 404;
-      const statusText = isMethodNotAllowed
-        ? "Method Not Allowed"
-        : "Not Found";
+      const status = bodyError?.status ?? (isMethodNotAllowed ? 405 : 404);
+      const statusText = getStatusText(status);
 
       logRequestEvent(this.config, this.logger, {
         req,
