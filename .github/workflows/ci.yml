@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DENO_NO_UPDATE_CHECK: "1"
+  DENO_NO_PROMPT: "1"
+
+jobs:
+  check:
+    name: ${{ matrix.check }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, test]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install verified Deno runtime
+        # Update the version and checksum together from the official release.
+        env:
+          DENO_VERSION: "2.9.6"
+          DENO_SHA256: "394f07f4da2bebe6ce6f1e7ce0fa16429b29b08c35e3fac3fe25972676dff4b2"
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/deno.zip"
+          install_dir="${RUNNER_TEMP}/deno-bin"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 \
+            "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$DENO_SHA256" "$archive" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          unzip -q "$archive" -d "$install_dir"
+          echo "$install_dir" >> "$GITHUB_PATH"
+          printf 'DENO_DIR=%s/deno-cache\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
+      - name: Install locked dependencies
+        run: ./scripts/bootstrap
+
+      - name: Run ${{ matrix.check }}
+        run: ./scripts/${{ matrix.check }}
