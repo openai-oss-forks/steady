@@ -446,3 +446,260 @@ Deno.test("resolvePartContentTypes", async (t) => {
     assertEquals(resolvePartContentTypes(mt, registryWith({})), {});
   });
 });
+
+Deno.test("multipart inference resolves composition references without guessing strings", async (t) => {
+  const registry = registryWith({
+    Object: { type: "object", properties: { model: { type: "string" } } },
+    Alias: { $ref: "#/components/schemas/Object" },
+    Text: { type: "string" },
+    Cycle: { $ref: "#/components/schemas/Cycle" },
+  });
+  const ref = { $ref: "#/components/schemas/Alias" };
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["allOf reference", { allOf: [ref] }, JSON_ESSENCE],
+    [
+      "nested composition",
+      { allOf: [{ anyOf: [ref, { type: "null" }] }] },
+      JSON_ESSENCE,
+    ],
+    ["nullable oneOf", { oneOf: [{ type: "null" }, ref] }, JSON_ESSENCE],
+    ["nullable type", { type: ["object", "null"] }, JSON_ESSENCE],
+    [
+      "array of composed objects",
+      { type: "array", items: { allOf: [ref] } },
+      JSON_ESSENCE,
+    ],
+    [
+      "composed string",
+      { allOf: [{ $ref: "#/components/schemas/Text" }] },
+      TEXT_PLAIN_ESSENCE,
+    ],
+    ["unconstrained", {}, undefined],
+    ["unresolved composition", {
+      allOf: [{ $ref: "#/components/schemas/Missing" }],
+    }, undefined],
+    ["cyclic reference", { $ref: "#/components/schemas/Cycle" }, undefined],
+    ["unknown array items", { type: "array", items: {} }, undefined],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      const mediaType: MediaTypeObject = {
+        schema: { type: "object", properties: { session: schema } },
+      };
+      assertEquals(
+        resolvePartContentTypes(mediaType, registry),
+        expected ? { session: expected } : {},
+      );
+      mediaType.encoding = { session: { contentType: "application/json" } };
+      assertEquals(resolvePartContentTypes(mediaType, registry), {
+        session: expected ?? JSON_ESSENCE,
+      });
+    });
+  }
+});
+
+Deno.test("multipart root refinements preserve property types", () => {
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: { payload: { type: "object" } },
+      allOf: [{ properties: { payload: { required: ["id"] } } }],
+    },
+  };
+  assertEquals(resolvePartContentTypes(mediaType, registryWith({})), {
+    payload: JSON_ESSENCE,
+  });
+});
+
+Deno.test("multipart inference bounds repeated acyclic references", () => {
+  const schemas: Record<string, Record<string, unknown>> = {
+    Level20: { type: "object" },
+  };
+  for (let i = 19; i >= 0; i--) {
+    const ref = { $ref: `#/components/schemas/Level${i + 1}` };
+    schemas[`Level${i}`] = { allOf: [ref, ref] };
+  }
+  const registry = registryWith(schemas);
+  const resolve = registry.resolveRef.bind(registry);
+  let resolutions = 0;
+  registry.resolveRef = (ref) => {
+    resolutions++;
+    return resolve(ref);
+  };
+  assertEquals(
+    resolvePartContentTypes({
+      schema: {
+        type: "object",
+        properties: { payload: { $ref: "#/components/schemas/Level0" } },
+      },
+    }, registry),
+    { payload: JSON_ESSENCE },
+  );
+  assertEquals(
+    resolutions < 1000,
+    true,
+    `Performed ${resolutions} reference resolutions`,
+  );
+});
+
+Deno.test("multipart nullable object arrays and constrained unions retain JSON inference", () => {
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: {
+        values: {
+          type: "array",
+          items: { anyOf: [{ type: "object" }, { type: "null" }] },
+        },
+        narrowed: {
+          type: "object",
+          allOf: [{ anyOf: [{ type: "string" }, { type: "object" }] }],
+        },
+        closed: { additionalProperties: false },
+      },
+    },
+  };
+  assertEquals(resolvePartContentTypes(mediaType, registryWith({})), {
+    values: JSON_ESSENCE,
+    narrowed: JSON_ESSENCE,
+    closed: JSON_ESSENCE,
+  });
+});
+
+Deno.test("multipart item constraints are independent of composition order", async (t) => {
+  const refinement = { items: { required: ["id"] } };
+  const objects = { items: { type: "object" as const } };
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["refinement first", { allOf: [refinement, objects] }, JSON_ESSENCE],
+    ["type first", { allOf: [objects, refinement] }, JSON_ESSENCE],
+    ["direct refinement", { ...refinement, allOf: [objects] }, JSON_ESSENCE],
+    ["nullable array", {
+      anyOf: [{ type: "null" }, {
+        type: "array",
+        allOf: [refinement, objects],
+      }],
+    }, JSON_ESSENCE],
+    ["untyped nullable array remains ambiguous", {
+      anyOf: [{ type: "null" }, { allOf: [refinement, objects] }],
+    }, undefined],
+    ["mixed array alternatives", {
+      anyOf: [objects, { items: { type: "string" } }],
+    }, undefined],
+    [
+      "unconstrained array alternative",
+      { anyOf: [objects, { type: "array" }] },
+      undefined,
+    ],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      assertEquals(
+        resolvePartContentTypes({
+          schema: { type: "object", properties: { payload: schema } },
+        }, registryWith({})),
+        expected ? { payload: expected } : {},
+      );
+    });
+  }
+});
+
+Deno.test("multipart value constraints and binary alternatives preserve decoder choice", async (t) => {
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["binary object alternative", {
+      type: ["string", "object"],
+      format: "binary",
+    }, undefined],
+    ["composed binary object alternative", {
+      allOf: [{ type: ["string", "object"] }, { format: "binary" }],
+    }, undefined],
+    ["binary on object", { type: "object", format: "binary" }, JSON_ESSENCE],
+    [
+      "binary nullable string",
+      { type: ["string", "null"], format: "binary" },
+      OCTET_STREAM_ESSENCE,
+    ],
+    ["object constant", { const: { id: 1 } }, JSON_ESSENCE],
+    ["local hint with unconstrained alternative", {
+      properties: { id: {} },
+      anyOf: [{}, { type: "object" }],
+    }, undefined],
+    ["local hint with nested unconstrained alternative", {
+      properties: { id: {} },
+      allOf: [{ anyOf: [{}, { type: "object" }] }],
+    }, undefined],
+    ["composed constant with structural hint", {
+      allOf: [{ const: "null" }, { properties: { id: {} } }],
+    }, TEXT_PLAIN_ESSENCE],
+    ["composed enum with structural hint", {
+      allOf: [{ enum: ["null", "auto"] }, { properties: { id: {} } }],
+    }, TEXT_PLAIN_ESSENCE],
+    ["structural hint with explicit alternatives", {
+      properties: { id: {} },
+      anyOf: [{ type: "string" }, { type: "object" }],
+    }, undefined],
+    ["structural alternative remains unconstrained", {
+      anyOf: [{ properties: { id: {} } }, { type: "object" }],
+    }, undefined],
+    ["object enum", { enum: [{ id: 1 }, { id: 2 }] }, JSON_ESSENCE],
+    ["string constant", { const: "null" }, TEXT_PLAIN_ESSENCE],
+    ["string enum", { enum: ["null", "auto"] }, TEXT_PLAIN_ESSENCE],
+    ["mixed enum", { enum: ["null", { id: 1 }] }, undefined],
+    ["constant overrides structural hint", {
+      const: "null",
+      properties: { id: {} },
+    }, TEXT_PLAIN_ESSENCE],
+    ["object array constant", { const: [{ id: 1 }] }, JSON_ESSENCE],
+    [
+      "number subtype constant",
+      { type: "integer", const: 1 },
+      TEXT_PLAIN_ESSENCE,
+    ],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      const mediaType: MediaTypeObject = {
+        schema: { type: "object", properties: { payload: schema } },
+      };
+      const registry = registryWith({});
+      assertEquals(
+        resolvePartContentTypes(mediaType, registry),
+        expected ? { payload: expected } : {},
+      );
+      mediaType.encoding = { payload: { contentType: "application/json" } };
+      assertEquals(resolvePartContentTypes(mediaType, registry), {
+        payload: expected ?? JSON_ESSENCE,
+      });
+    });
+  }
+});
+
+Deno.test("multipart nullable root alternatives retain property inference", () => {
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const object = {
+      type: "object" as const,
+      properties: { payload: { type: "object" as const } },
+    };
+    const nullable = { type: "null" as const };
+    for (const branches of [[object, nullable], [nullable, object]]) {
+      assertEquals(
+        resolvePartContentTypes(
+          { schema: { [keyword]: branches } },
+          registryWith({}),
+        ),
+        { payload: JSON_ESSENCE },
+      );
+    }
+  }
+});
