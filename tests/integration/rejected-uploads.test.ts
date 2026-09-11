@@ -13,6 +13,7 @@ async function upload(
   port: number,
   path: string,
   method = "POST",
+  expectedStatus = path === "/known" || method !== "POST" ? 405 : 404,
 ): Promise<void> {
   const conn = await Deno.connect({ hostname: "127.0.0.1", port });
   const timer = setTimeout(() => conn.close(), 5000);
@@ -57,9 +58,7 @@ async function upload(
     }
     assert(
       status.startsWith(
-        path === "/known" || method !== "POST"
-          ? "HTTP/1.1 405"
-          : "HTTP/1.1 404",
+        `HTTP/1.1 ${expectedStatus}`,
       ),
       status,
     );
@@ -93,6 +92,15 @@ Deno.test("routing errors drain delayed concurrent multipart uploads", async () 
       }
     }
     await upload(port, "/known", "PROPFIND");
+    for (
+      const path of [
+        "/_x-steady/health",
+        "/_x-steady/spec",
+        "/_x-steady/redirected",
+      ]
+    ) {
+      await upload(port, path, "POST", 200);
+    }
   } finally {
     await server.stop();
   }

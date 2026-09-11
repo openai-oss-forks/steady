@@ -236,15 +236,77 @@ export class MockServer {
 
   private async drainRejectedBody(
     req: Request,
-  ): Promise<RequestLimitError | undefined> {
+  ): Promise<{ status: number; diagnostic: Diagnostic } | undefined> {
     try {
       await drainLimitedBody(req, this.config.maxRequestBodyBytes);
       return undefined;
     } catch (error) {
-      return error instanceof RequestLimitError
-        ? error
-        : new RequestLimitError("Failed to read request body");
+      const limited = error instanceof RequestLimitError;
+      const code = limited ? "E3024" : "E3021";
+      const definition = getCode(code);
+      return {
+        status: limited ? error.status : 400,
+        diagnostic: {
+          code,
+          severity: definition.severity,
+          category: definition.category,
+          requestPath: "body",
+          specPointer: "",
+          message: limited ? error.message : "Failed to read request body",
+          attribution: { confidence: 1, reasoning: [] },
+        },
+      };
     }
+  }
+
+  private rejectionResponse(
+    req: Request,
+    startTime: number,
+    diagnostics: Diagnostic[],
+    status: number,
+  ): Response {
+    const method = req.method.toLowerCase();
+    this.requestCount++;
+    this.failedCount++;
+    this.collector.addRuntimeDiagnostics(
+      diagnostics,
+      method,
+      "[unmatched route]",
+      false,
+    );
+    const sessionId = req.headers.get("X-Steady-Session");
+    if (sessionId) {
+      this.sessionStore.addRequest(
+        sessionId,
+        method,
+        "[unmatched route]",
+        diagnostics,
+      );
+    }
+    logRequestEvent(this.config, this.logger, {
+      req,
+      path: new URL(req.url).pathname,
+      pathPattern: "[unmatched route]",
+      method,
+      status,
+      statusText: getStatusText(status),
+      timing: Math.round(performance.now() - startTime),
+      diagnostics,
+    });
+    const first = diagnostics[0];
+    return addDiagnosticHeaders(
+      new Response(
+        JSON.stringify({
+          error: first?.message ?? "Route not found",
+          suggestion: first?.suggestion,
+        }),
+        {
+          status,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+      diagnostics,
+    );
   }
 
   private async handleRequest(req: Request): Promise<Response> {
@@ -253,16 +315,23 @@ export class MockServer {
     const rawMethod = req.method.toLowerCase();
     const path = url.pathname;
 
-    // Handle special endpoints (no logging for these)
-    if (path === "/_x-steady/health") {
-      return this.handleHealth();
-    }
-
-    if (path === "/_x-steady/spec") {
-      return this.handleSpec();
-    }
-
-    if (path === "/_x-steady/redirected") {
+    // Control responses must also wait for an upload to finish. Preserve their
+    // existing method handling, including POST redirects that retain the body.
+    if (
+      ["/_x-steady/health", "/_x-steady/spec", "/_x-steady/redirected"]
+        .includes(path)
+    ) {
+      const bodyError = await this.drainRejectedBody(req);
+      if (bodyError) {
+        return this.rejectionResponse(
+          req,
+          startTime,
+          [bodyError.diagnostic],
+          bodyError.status,
+        );
+      }
+      if (path === "/_x-steady/health") return this.handleHealth();
+      if (path === "/_x-steady/spec") return this.handleSpec();
       return new Response(
         JSON.stringify({ status: "redirected" }),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -277,12 +346,22 @@ export class MockServer {
     // Validate HTTP method before any processing
     if (!isHttpMethod(rawMethod)) {
       const bodyError = await this.drainRejectedBody(req);
-      return new Response(
-        bodyError?.message ?? `Method ${req.method} is not supported`,
-        {
-          status: bodyError?.status ?? 405,
-          headers: { "Content-Type": "text/plain" },
-        },
+      const definition = getCode("E2002");
+      const diagnostics: Diagnostic[] = [{
+        code: "E2002",
+        severity: definition.severity,
+        category: definition.category,
+        requestPath: "",
+        specPointer: "",
+        message: `Method ${req.method} is not supported`,
+        attribution: { confidence: 1, reasoning: [] },
+      }];
+      if (bodyError) diagnostics.unshift(bodyError.diagnostic);
+      return this.rejectionResponse(
+        req,
+        startTime,
+        diagnostics,
+        bodyError?.status ?? 405,
       );
     }
     const method = rawMethod;
@@ -301,71 +380,11 @@ export class MockServer {
       // Wait for ordinary uploads to finish before responding. Closing while
       // clients are still writing can hide the HTTP error behind EPIPE.
       const bodyError = await this.drainRejectedBody(req);
-      const timing = Math.round(performance.now() - startTime);
-      this.requestCount++;
-      this.failedCount++;
-
       const routeDiags = [...routeResult.diagnostics];
-      if (bodyError) {
-        const definition = getCode("E3024");
-        routeDiags.unshift({
-          code: "E3024",
-          severity: definition.severity,
-          category: definition.category,
-          requestPath: "body",
-          specPointer: "",
-          message: bodyError.message,
-          attribution: { confidence: 1, reasoning: [] },
-        });
-      }
-
-      // Collect runtime diagnostics
-      this.collector.addRuntimeDiagnostics(
-        routeDiags,
-        method,
-        "[unmatched route]",
-        false,
-      );
-
-      // Track session if X-Steady-Session header present
-      const sessionId = req.headers.get("X-Steady-Session");
-      if (sessionId) {
-        this.sessionStore.addRequest(
-          sessionId,
-          method,
-          "[unmatched route]",
-          routeDiags,
-        );
-      }
-
-      // E2002 (method not allowed) -> 405, E2001 (path not found) -> 404
+      if (bodyError) routeDiags.unshift(bodyError.diagnostic);
       const isMethodNotAllowed = routeDiags.some((d) => d.code === "E2002");
       const status = bodyError?.status ?? (isMethodNotAllowed ? 405 : 404);
-      const statusText = getStatusText(status);
-
-      logRequestEvent(this.config, this.logger, {
-        req,
-        path,
-        pathPattern: "[unmatched route]",
-        method,
-        status,
-        statusText,
-        timing,
-        diagnostics: routeDiags,
-      });
-
-      const firstDiag = routeDiags[0];
-      const errorResponse = new Response(
-        JSON.stringify({
-          error: firstDiag?.message ?? "Route not found",
-          suggestion: firstDiag?.suggestion,
-        }),
-        {
-          status,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      return addDiagnosticHeaders(errorResponse, routeDiags);
+      return this.rejectionResponse(req, startTime, routeDiags, status);
     }
 
     const {

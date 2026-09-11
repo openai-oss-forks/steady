@@ -256,3 +256,66 @@ Deno.test("draining releases errored request streams", async () => {
   );
   assertEquals(req.body?.locked, false);
 });
+
+Deno.test("unsupported methods retain upload diagnostics and session outcomes", async () => {
+  const { spec } = await parseSpecFromFile(
+    "tests/specs/synthetic-service.yaml",
+  );
+  const server = new MockServer(spec, { ...config, maxRequestBodyBytes: 128 });
+  const port = await server.start();
+  try {
+    for (
+      const [body, status, code] of [["small", 405, "E2002"], [
+        "x".repeat(256),
+        413,
+        "E3024",
+      ]] as const
+    ) {
+      const response = await fetch(`http://127.0.0.1:${port}/missing`, {
+        method: "PROPFIND",
+        body,
+        headers: { "X-Steady-Session": "rejected-method" },
+      });
+      assertEquals(response.status, status);
+      assertEquals(response.headers.get("x-steady-error-1-code"), code);
+      await response.text();
+    }
+    const response = await fetch(
+      `http://127.0.0.1:${port}/_x-steady/sessions/rejected-method`,
+    );
+    const report = await response.json();
+    assertEquals(report.requests, 2);
+    assertEquals(report.summary, { total: 2, valid: 0, invalid: 2 });
+    assertEquals(
+      report.sdk_issues.some((issue: { code: string }) =>
+        issue.code === "E3024"
+      ),
+      true,
+    );
+  } finally {
+    await server.stop();
+  }
+});
+
+Deno.test("rejected upload stream failures are body errors, not limit errors", async () => {
+  const { spec } = await parseSpecFromFile(
+    "tests/specs/synthetic-service.yaml",
+  );
+  const server = new MockServer(spec, config);
+  for (const path of ["/missing", "/_x-steady/health"]) {
+    const request = new Request(`http://localhost${path}`, {
+      method: "POST",
+      body: new ReadableStream({
+        start(controller) {
+          controller.error(new Error("private transport detail"));
+        },
+      }),
+    });
+    // Inject a failed transport stream directly: fetch cannot send one to a server.
+    const response = await server["handleRequest"](request);
+    assertEquals(response.status, 400);
+    assertEquals(response.headers.get("x-steady-error-1-code"), "E3021");
+    assertEquals((await response.json()).error, "Failed to read request body");
+    assertEquals(request.body?.locked, false);
+  }
+});
