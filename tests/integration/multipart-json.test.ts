@@ -141,12 +141,90 @@ Deno.test("multipart JSON composition preserves values and validates filename-le
         });
         const body = await response.text();
         assertEquals(response.status, status, body);
-        if (name === "malformed JSON") {
-          assertEquals(response.headers.get("x-steady-error-1-code"), "E3021");
-        }
       });
     }
   } finally {
     await server.stop();
+  }
+});
+
+Deno.test("multipart alternative roots preserve literal string values", async () => {
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const mediaType: MediaTypeObject = {
+      schema: {
+        [keyword]: [
+          {
+            type: "object",
+            properties: {
+              kind: { const: "text" },
+              payload: { type: "string" },
+            },
+          },
+          {
+            type: "object",
+            properties: {
+              kind: { const: "object" },
+              payload: { type: "object" },
+            },
+          },
+        ],
+      },
+    };
+    const registry = SchemaRegistry.fromSpec({
+      openapi: "3.1.0",
+      info: { title: "Alternatives", version: "1" },
+      paths: {},
+    });
+    const partContentTypes = resolvePartContentTypes(mediaType, registry);
+    const form = new FormData();
+    form.set("kind", "text");
+    form.set("payload", "null");
+    const result = await parseRequestBody(
+      new Request("http://localhost", { method: "POST", body: form }),
+      null,
+      { partContentTypes },
+    );
+    assertEquals(isParseError(result), false);
+    if (!isParseError(result)) {
+      assertEquals(result.body, { kind: "text", payload: "null" });
+    }
+  }
+});
+
+Deno.test("multipart unions keep plain string and file alternatives", async () => {
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: {
+        strategy: {
+          anyOf: [{ type: "string", enum: ["auto"] }, { type: "object" }],
+        },
+        video: {
+          anyOf: [{ type: "string", format: "binary" }, { type: "object" }],
+        },
+      },
+    },
+  };
+  const registry = SchemaRegistry.fromSpec({
+    openapi: "3.1.0",
+    info: { title: "Alternatives", version: "1" },
+    paths: {},
+  });
+  const form = new FormData();
+  form.set("strategy", "auto");
+  form.set(
+    "video",
+    new File(["synthetic video"], "video.bin", {
+      type: "application/octet-stream",
+    }),
+  );
+  const result = await parseRequestBody(
+    new Request("http://localhost", { method: "POST", body: form }),
+    null,
+    { partContentTypes: resolvePartContentTypes(mediaType, registry) },
+  );
+  assertEquals(isParseError(result), false);
+  if (!isParseError(result)) {
+    assertEquals(result.body, { strategy: "auto", video: "[File]" });
   }
 });

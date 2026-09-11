@@ -120,14 +120,12 @@ function propertyConstraints(root: Schema): Record<string, Schema> {
       members.push(property);
       contributions.set(name, members);
     }
-    pending.push(
-      ...schema.allOf ?? [],
-      ...schema.anyOf ?? [],
-      ...schema.oneOf ?? [],
-    );
+    // Only conjunctions contribute unconditional constraints. Root alternatives
+    // may give the same field incompatible types; choosing one parser would
+    // corrupt valid values from another branch (for example the string "null").
+    pending.push(...schema.allOf ?? []);
   }
-  // This is only a shape-inference view. Validation still uses the original
-  // schema, including its distinction between intersections and alternatives.
+  // This is only a shape-inference view; validation uses the original schema.
   return Object.fromEntries(
     [...contributions].map(([name, members]) => [name, { allOf: members }]),
   );
