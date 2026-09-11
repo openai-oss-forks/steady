@@ -84,3 +84,71 @@ Deno.test("HTTP SSE preserves event shape and ends after the declared events", a
     await server.stop();
   }
 });
+
+Deno.test("HTTP SSE supports raw and named examples and bodyless statuses", async () => {
+  const raw = 'event: sample.delta\ndata: {"text":"hello"}\n\ndata: [DONE]\n\n';
+  const sequence = [{ event: "sample.delta", data: { text: "hello" } }];
+  const cases = [
+    { path: "/raw", status: 200, media: { example: raw }, expected: raw },
+    {
+      path: "/named-raw",
+      status: 200,
+      media: { examples: { first: { value: raw } } },
+      expected: raw,
+    },
+    {
+      path: "/named-sequence",
+      status: 200,
+      media: { examples: { first: { value: sequence } } },
+      expected: 'id: 0\nevent: sample.delta\ndata: {"text":"hello"}\n\n',
+    },
+    {
+      path: "/referenced-example",
+      status: 200,
+      media: { examples: { first: { $ref: "#/components/examples/Events" } } },
+      expected: 'id: 0\nevent: sample.delta\ndata: {"text":"hello"}\n\n',
+    },
+    { path: "/empty", status: 200, media: { example: [] }, expected: "" },
+    ...[204, 205, 304].map((status) => ({
+      path: `/status-${status}`,
+      status,
+      media: { example: sequence },
+      expected: "",
+    })),
+  ];
+  const { spec } = await parseSpec(JSON.stringify({
+    openapi: "3.1.0",
+    info: { title: "Synthetic examples API", version: "1" },
+    paths: Object.fromEntries(cases.map(({ path, status, media }) => [
+      path,
+      {
+        get: {
+          responses: {
+            [status]: {
+              description: "Example",
+              content: { "text/event-stream": media },
+            },
+          },
+        },
+      },
+    ])),
+    components: { examples: { Events: { value: sequence } } },
+  }));
+  const server = new MockServer(spec, {
+    port: 0,
+    host: "127.0.0.1",
+    logLevel: "summary",
+    streaming: { count: 1, interval: 0 },
+  });
+  const port = await server.start();
+  try {
+    for (const { path, status, expected } of cases) {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`);
+      const body = await response.text();
+      assertEquals(response.status, status, path);
+      assertEquals(body, expected, path);
+    }
+  } finally {
+    await server.stop();
+  }
+});

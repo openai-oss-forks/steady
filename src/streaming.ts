@@ -236,9 +236,19 @@ export function createStreamingResponse(
   validateStreamingOptions(options);
   const warnings: string[] = [];
 
+  // Raw SSE examples already contain their wire framing and termination.
+  if (format === "sse" && typeof options.example === "string") {
+    checkGeneratedValue(options.example);
+    return {
+      stream: createTimedStream([options.example][Symbol.iterator](), 0),
+      warnings,
+    };
+  }
+
   // For SSE with event sequence examples, use the example-based streaming
   if (
-    format === "sse" && options.example && isSSEEventSequence(options.example)
+    format === "sse" && Array.isArray(options.example) &&
+    (options.example.length === 0 || isSSEEventSequence(options.example))
   ) {
     return { stream: createSSEFromExample(options.example, options), warnings };
   }
