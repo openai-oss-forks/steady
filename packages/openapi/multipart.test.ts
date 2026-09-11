@@ -501,3 +501,47 @@ Deno.test("multipart inference resolves composition references without guessing 
     });
   }
 });
+
+Deno.test("multipart root refinements preserve property types", () => {
+  const mediaType: MediaTypeObject = {
+    schema: {
+      type: "object",
+      properties: { payload: { type: "object" } },
+      allOf: [{ properties: { payload: { required: ["id"] } } }],
+    },
+  };
+  assertEquals(resolvePartContentTypes(mediaType, registryWith({})), {
+    payload: JSON_ESSENCE,
+  });
+});
+
+Deno.test("multipart inference bounds repeated acyclic references", () => {
+  const schemas: Record<string, Record<string, unknown>> = {
+    Level20: { type: "object" },
+  };
+  for (let i = 19; i >= 0; i--) {
+    const ref = { $ref: `#/components/schemas/Level${i + 1}` };
+    schemas[`Level${i}`] = { allOf: [ref, ref] };
+  }
+  const registry = registryWith(schemas);
+  const resolve = registry.resolveRef.bind(registry);
+  let resolutions = 0;
+  registry.resolveRef = (ref) => {
+    resolutions++;
+    return resolve(ref);
+  };
+  assertEquals(
+    resolvePartContentTypes({
+      schema: {
+        type: "object",
+        properties: { payload: { $ref: "#/components/schemas/Level0" } },
+      },
+    }, registry),
+    { payload: JSON_ESSENCE },
+  );
+  assertEquals(
+    resolutions < 1000,
+    true,
+    `Performed ${resolutions} reference resolutions`,
+  );
+});

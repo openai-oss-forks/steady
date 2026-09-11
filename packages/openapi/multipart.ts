@@ -21,7 +21,6 @@
 
 import {
   effectiveItems,
-  effectiveProperties,
   effectiveType,
   isObjectSchema,
   type Schema,
@@ -70,7 +69,7 @@ export function resolvePartContentTypes(
   const result: Record<string, MediaTypeEssence> = {};
 
   const rootSchema = resolveForInference(mediaType.schema, registry);
-  const properties = rootSchema ? effectiveProperties(rootSchema) : null;
+  const properties = rootSchema ? propertyConstraints(rootSchema) : null;
   const names = new Set<string>();
   if (properties) {
     for (const name of Object.keys(properties)) names.add(name);
@@ -110,6 +109,30 @@ export function resolvePartContentTypes(
   return result;
 }
 
+/** Collect every contribution without overwriting a property's type with a refinement. */
+function propertyConstraints(root: Schema): Record<string, Schema> {
+  const contributions = new Map<string, Schema[]>();
+  const pending = [root];
+  while (pending.length) {
+    const schema = pending.pop()!;
+    for (const [name, property] of Object.entries(schema.properties ?? {})) {
+      const members = contributions.get(name) ?? [];
+      members.push(property);
+      contributions.set(name, members);
+    }
+    pending.push(
+      ...schema.allOf ?? [],
+      ...schema.anyOf ?? [],
+      ...schema.oneOf ?? [],
+    );
+  }
+  // This is only a shape-inference view. Validation still uses the original
+  // schema, including its distinction between intersections and alternatives.
+  return Object.fromEntries(
+    [...contributions].map(([name, members]) => [name, { allOf: members }]),
+  );
+}
+
 /**
  * OAS 3.1 default content type for a property with no explicit
  * encoding. Walks composition and resolves `$ref` through the
@@ -130,8 +153,7 @@ function implicitEssence(
   }
 
   if (effectiveType(resolved) === "array") {
-    const items = effectiveItems(resolved);
-    const itemSchema = items;
+    const itemSchema = effectiveItems(resolved);
     if (!itemSchema) return null;
     if (isBinaryByEncoding(itemSchema)) return OCTET_STREAM_ESSENCE;
     // OAS 3.1: "array of primitives" -> text/plain. Anything else
@@ -159,16 +181,18 @@ function isBinaryByEncoding(schema: Schema): boolean {
  * Resolve only the shape needed by the schema inspection helpers: references,
  * composition, and items. Do not expand object properties (which can recurse).
  * Unknown or cyclic references stay unknown rather than becoming text/plain.
+ * A shared node budget also bounds repeated expansion in acyclic reference graphs.
  * The returned copy never changes the registry's validation schemas.
  */
 function resolveForInference(
   value: SchemaObject | ReferenceObject | undefined,
   registry: SchemaRegistry,
   ancestors = new Set<SchemaObject>(),
+  budget = { remaining: 1000 },
 ): SchemaObject | undefined {
   if (
     !value || typeof value === "boolean" || ancestors.has(value) ||
-    ancestors.size >= 50
+    ancestors.size >= 50 || budget.remaining-- <= 0
   ) {
     return undefined;
   }
@@ -178,19 +202,20 @@ function resolveForInference(
     for (const key of ["allOf", "anyOf", "oneOf"] as const) {
       if (schema[key]) {
         schema[key] = schema[key].map((member) =>
-          resolveForInference(member, registry, ancestors) ?? {}
+          resolveForInference(member, registry, ancestors, budget) ?? {}
         );
       }
     }
     if (schema.items && !Array.isArray(schema.items)) {
-      schema.items = resolveForInference(schema.items, registry, ancestors) ??
-        {};
+      schema.items =
+        resolveForInference(schema.items, registry, ancestors, budget) ??
+          {};
     }
     if ($ref) {
       const target = registry.resolveRef($ref)?.raw;
       const resolved = typeof target === "boolean"
         ? undefined
-        : resolveForInference(target, registry, ancestors);
+        : resolveForInference(target, registry, ancestors, budget);
       if (resolved) schema.allOf = [resolved, ...schema.allOf ?? []];
     }
     return schema;
