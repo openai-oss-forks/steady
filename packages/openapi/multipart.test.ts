@@ -569,3 +569,91 @@ Deno.test("multipart nullable object arrays and constrained unions retain JSON i
     closed: JSON_ESSENCE,
   });
 });
+
+Deno.test("multipart item constraints are independent of composition order", async (t) => {
+  const refinement = { items: { required: ["id"] } };
+  const objects = { items: { type: "object" as const } };
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["refinement first", { allOf: [refinement, objects] }, JSON_ESSENCE],
+    ["type first", { allOf: [objects, refinement] }, JSON_ESSENCE],
+    ["direct refinement", { ...refinement, allOf: [objects] }, JSON_ESSENCE],
+    ["nullable array", {
+      anyOf: [{ type: "null" }, { allOf: [refinement, objects] }],
+    }, JSON_ESSENCE],
+    ["mixed array alternatives", {
+      anyOf: [objects, { items: { type: "string" } }],
+    }, undefined],
+    [
+      "unconstrained array alternative",
+      { anyOf: [objects, { type: "array" }] },
+      undefined,
+    ],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      assertEquals(
+        resolvePartContentTypes({
+          schema: { type: "object", properties: { payload: schema } },
+        }, registryWith({})),
+        expected ? { payload: expected } : {},
+      );
+    });
+  }
+});
+
+Deno.test("multipart value constraints and binary alternatives preserve decoder choice", async (t) => {
+  const cases: [
+    string,
+    Record<string, unknown>,
+    MediaTypeEssence | undefined,
+  ][] = [
+    ["binary object alternative", {
+      type: ["string", "object"],
+      format: "binary",
+    }, undefined],
+    ["composed binary object alternative", {
+      allOf: [{ type: ["string", "object"] }, { format: "binary" }],
+    }, undefined],
+    ["binary on object", { type: "object", format: "binary" }, JSON_ESSENCE],
+    [
+      "binary nullable string",
+      { type: ["string", "null"], format: "binary" },
+      OCTET_STREAM_ESSENCE,
+    ],
+    ["object constant", { const: { id: 1 } }, JSON_ESSENCE],
+    ["object enum", { enum: [{ id: 1 }, { id: 2 }] }, JSON_ESSENCE],
+    ["string constant", { const: "null" }, TEXT_PLAIN_ESSENCE],
+    ["string enum", { enum: ["null", "auto"] }, TEXT_PLAIN_ESSENCE],
+    ["mixed enum", { enum: ["null", { id: 1 }] }, undefined],
+    ["constant overrides structural hint", {
+      const: "null",
+      properties: { id: {} },
+    }, TEXT_PLAIN_ESSENCE],
+    ["object array constant", { const: [{ id: 1 }] }, JSON_ESSENCE],
+    [
+      "number subtype constant",
+      { type: "integer", const: 1 },
+      TEXT_PLAIN_ESSENCE,
+    ],
+  ];
+  for (const [name, schema, expected] of cases) {
+    await t.step(name, () => {
+      const mediaType: MediaTypeObject = {
+        schema: { type: "object", properties: { payload: schema } },
+      };
+      const registry = registryWith({});
+      assertEquals(
+        resolvePartContentTypes(mediaType, registry),
+        expected ? { payload: expected } : {},
+      );
+      mediaType.encoding = { payload: { contentType: "application/json" } };
+      assertEquals(resolvePartContentTypes(mediaType, registry), {
+        payload: expected ?? JSON_ESSENCE,
+      });
+    });
+  }
+});

@@ -20,7 +20,6 @@
  */
 
 import {
-  effectiveItems,
   effectiveType,
   isObjectSchema,
   type Schema,
@@ -144,8 +143,6 @@ function implicitEssence(
   const resolved = resolveForInference(propSchema, registry);
   if (!resolved) return null;
 
-  if (isBinaryByEncoding(resolved)) return OCTET_STREAM_ESSENCE;
-
   const types = inferredTypes(resolved);
   if (!types) return null;
   types.delete("null");
@@ -153,25 +150,68 @@ function implicitEssence(
   for (const type of types) {
     if (type === "object") essences.add(JSON_ESSENCE);
     else if (type === "array") {
-      const items = effectiveItems(resolved);
+      const items = inferredItems(resolved);
       const itemTypes = items ? inferredTypes(items) : null;
       if (!items || !itemTypes || itemTypes.size === 0) return null;
       if (itemTypes.size > 1) itemTypes.delete("null");
-      if (isBinaryByEncoding(items)) essences.add(OCTET_STREAM_ESSENCE);
-      else {
-        for (const itemType of itemTypes) {
-          essences.add(
-            itemType === "object" || itemType === "array"
-              ? JSON_ESSENCE
-              : TEXT_PLAIN_ESSENCE,
-          );
-        }
+      for (const itemType of itemTypes) {
+        essences.add(
+          itemType === "object" || itemType === "array"
+            ? JSON_ESSENCE
+            : itemType === "string" && isBinaryByEncoding(items)
+            ? OCTET_STREAM_ESSENCE
+            : TEXT_PLAIN_ESSENCE,
+        );
       }
-    } else essences.add(TEXT_PLAIN_ESSENCE);
+    } else {
+      essences.add(
+        type === "string" && isBinaryByEncoding(resolved)
+          ? OCTET_STREAM_ESSENCE
+          : TEXT_PLAIN_ESSENCE,
+      );
+    }
   }
   // A field accepting both strings/files and objects has no unambiguous
   // default decoder. In particular, the literal string "null" must stay a string.
   return essences.size === 1 ? [...essences][0]! : null;
+}
+
+/** Project item constraints without choosing an arbitrary composition branch. */
+function inferredItems(schema: Schema): Schema | null {
+  const constraints: Schema[] = [];
+  if (schema.items && !Array.isArray(schema.items)) {
+    constraints.push(schema.items);
+  }
+  if (Array.isArray(schema.const)) constraints.push({ enum: schema.const });
+  if (schema.enum) {
+    const arrays = schema.enum.filter(Array.isArray);
+    if (arrays.length) constraints.push({ enum: arrays.flat() });
+  }
+  for (const member of schema.allOf ?? []) {
+    const items = inferredItems(member);
+    if (items) constraints.push(items);
+  }
+  for (const key of ["anyOf", "oneOf"] as const) {
+    if (!schema[key]) continue;
+    const arrays = schema[key].filter((member) => {
+      const types = inferredTypes(member);
+      return !types || types.has("array");
+    });
+    if (arrays.length) {
+      constraints.push({
+        anyOf: arrays.map((member) => inferredItems(member) ?? {}),
+      });
+    }
+  }
+  return constraints.length ? { allOf: constraints } : null;
+}
+
+function valueType(value: unknown): string {
+  return value === null
+    ? "null"
+    : Array.isArray(value)
+    ? "array"
+    : typeof value;
 }
 
 /** Infer possible types, preserving intersections and alternatives separately. */
@@ -182,10 +222,14 @@ function inferredTypes(schema: Schema): Set<string> | null {
     anyOf: undefined,
     oneOf: undefined,
   };
-  const localType = schema.type ?? effectiveType(local) ??
-    (isObjectSchema(local) ? "object" : null);
+  // Explicit value constraints take precedence over structural hints. For
+  // example, properties does not invalidate a string constant in JSON Schema.
+  const localType = schema.type;
+  const normalizeType = (type: string) => type === "integer" ? "number" : type;
   let types: Set<string> | null = localType
-    ? new Set(Array.isArray(localType) ? localType : [localType])
+    ? new Set(
+      (Array.isArray(localType) ? localType : [localType]).map(normalizeType),
+    )
     : null;
   const constrain = (constraint: Set<string> | null) => {
     if (constraint) {
@@ -194,6 +238,15 @@ function inferredTypes(schema: Schema): Set<string> | null {
         : constraint;
     }
   };
+  if (Object.hasOwn(schema, "const")) {
+    constrain(new Set([valueType(schema.const)]));
+  }
+  if (schema.enum) constrain(new Set(schema.enum.map(valueType)));
+  if (!types) {
+    const hint = effectiveType(local) ??
+      (isObjectSchema(local) ? "object" : null);
+    if (hint) types = new Set([normalizeType(hint)]);
+  }
   for (const member of schema.allOf ?? []) constrain(inferredTypes(member));
   for (const key of ["anyOf", "oneOf"] as const) {
     if (!schema[key]) continue;

@@ -268,3 +268,52 @@ Deno.test("referenced multipart unions do not decode literal strings or JSON fil
     assertEquals(result.body, { payload: "null", upload: "[File]" });
   }
 });
+
+Deno.test("multipart composed items and value constraints decode request values", async () => {
+  const registry = SchemaRegistry.fromSpec({
+    openapi: "3.1.0",
+    info: { title: "Decoder constraints", version: "1" },
+    paths: {},
+  });
+  const cases: [Record<string, unknown>, unknown, boolean][] = [
+    [
+      {
+        allOf: [{ items: { required: ["id"] } }, { items: { type: "object" } }],
+      },
+      [{ id: "ok" }],
+      false,
+    ],
+    [
+      {
+        allOf: [{ items: { type: "object" } }, { items: { required: ["id"] } }],
+      },
+      [{ id: "ok" }],
+      false,
+    ],
+    [{ const: { id: 1 } }, { id: 1 }, false],
+    [{ enum: [{ id: 1 }, { id: 2 }] }, { id: 2 }, false],
+    [{ const: "null" }, "null", true],
+    [{ enum: ["null", "auto"] }, "null", true],
+    [{ type: ["string", "object"], format: "binary" }, { id: 1 }, true],
+  ];
+  for (const [schema, value, explicit] of cases) {
+    const mediaType: MediaTypeObject = {
+      schema: { type: "object", properties: { payload: schema } },
+      ...(explicit
+        ? { encoding: { payload: { contentType: "application/json" } } }
+        : {}),
+    };
+    const form = new FormData();
+    form.set(
+      "payload",
+      typeof value === "string" ? value : JSON.stringify(value),
+    );
+    const result = await parseRequestBody(
+      new Request("http://localhost", { method: "POST", body: form }),
+      null,
+      { partContentTypes: resolvePartContentTypes(mediaType, registry) },
+    );
+    assertEquals(isParseError(result), false);
+    if (!isParseError(result)) assertEquals(result.body, { payload: value });
+  }
+});
