@@ -76,6 +76,7 @@
       "sdk-tests/**"
     ]
   },
+  "minimumDependencyAge": "P14D",
   "lock": {
     "path": "./deno.lock",
     "frozen": true

@@ -19,7 +19,10 @@ execution permissions, or repository automation require security-conscious
 review and regression tests. Report a suspected leaked credential privately and
 have its owner revoke or rotate it; deleting it from a file is not sufficient.
 
-GitHub Actions, package publishing, third-party SDK integration jobs, and
-release automation remain disabled until separately approved. Maintainers must
-complete the private staging review, provenance review, secret scan, and
-destination repository controls before any public import or release.
+GitHub Actions is limited to read-only test and lint checks on GitHub-hosted
+runners, with SHA-pinned actions, a checksum-verified Deno runtime, and frozen
+dependencies. Do not provide PATs or repository secrets to these jobs. Package
+publishing, third-party SDK integration jobs, and release automation remain
+disabled until separately approved. Maintainers must complete the private
+staging review, provenance review, secret scan, and destination repository
+controls before any public import or release.
