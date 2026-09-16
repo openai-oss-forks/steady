@@ -69,10 +69,11 @@ of `src/`; `scripts/check-boundaries.ts` enforces this boundary.
   separate approval and remain disabled. Preserve managed hooks, required
   reviews, secret scanning, and push protection; never bypass hooks or overwrite
   their configuration.
-- Preserve GitHub-managed security CodeQL scanning for JavaScript/TypeScript and
-  Actions, and its required results. Code Quality runs do not replace security
-  analysis. Follow [CONTRIBUTING.md](CONTRIBUTING.md#security-scanning) for
-  review requirements and managed-scanning limitations.
+- Preserve the explicit CodeQL workflow for JavaScript/TypeScript and Actions,
+  including Dependabot PR coverage and required results. Code Quality runs do
+  not replace security analysis. Follow
+  [CONTRIBUTING.md](CONTRIBUTING.md#security-scanning) for review requirements
+  and scanning configuration.
 
 ## Validation and review
 
