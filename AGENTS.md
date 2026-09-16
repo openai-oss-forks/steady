@@ -49,9 +49,12 @@ of `src/`; `scripts/check-boundaries.ts` enforces this boundary.
 ## Dependencies and automation
 
 - Preserve exact dependency versions, the frozen lockfile, and the existing
-  `minimumDependencyAge: "P14D"` policy without exclusions. Follow
-  [CONTRIBUTING.md](CONTRIBUTING.md) for dependency, Deno, and action maturity
-  requirements; automated dependency-update PRs remain disabled.
+  `minimumDependencyAge: "P14D"` policy for ordinary updates. Dependabot opens
+  Deno and GitHub Actions update PRs for maintainer review; do not enable
+  auto-merge. Follow [CONTRIBUTING.md](CONTRIBUTING.md#dependency-updates) for
+  maturity and provenance requirements. Only its
+  [urgent security process](CONTRIBUTING.md#urgent-security-updates) permits
+  explicitly approved, narrowly scoped, temporary age-policy exceptions.
 - Review provenance for dependency changes and upstream imports. Preserve pinned
   revisions, license/attribution notices, and the records described in
   [PROVENANCE.md](PROVENANCE.md). Do not import vendor corpora or unreviewed
@@ -66,6 +69,10 @@ of `src/`; `scripts/check-boundaries.ts` enforces this boundary.
   separate approval and remain disabled. Preserve managed hooks, required
   reviews, secret scanning, and push protection; never bypass hooks or overwrite
   their configuration.
+- Preserve GitHub-managed security CodeQL scanning for JavaScript/TypeScript and
+  Actions, and its required results. Code Quality runs do not replace security
+  analysis. Follow [CONTRIBUTING.md](CONTRIBUTING.md#security-scanning) for
+  review requirements and managed-scanning limitations.
 
 ## Validation and review
 
