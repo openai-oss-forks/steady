@@ -2,25 +2,25 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/assert@1.0.19": "1.0.19",
-    "jsr:@std/assert@^1.0.17": "1.0.19",
-    "jsr:@std/async@^1.1.0": "1.5.0",
+    "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/async@^1.5.0": "1.5.0",
     "jsr:@std/cli@1.0.32": "1.0.32",
-    "jsr:@std/data-structures@^1.0.10": "1.1.2",
+    "jsr:@std/data-structures@^1.1.2": "1.1.2",
     "jsr:@std/dotenv@0.225.5": "0.225.5",
     "jsr:@std/dotenv@~0.225.5": "0.225.5",
     "jsr:@std/fmt@1": "1.0.8",
     "jsr:@std/fmt@1.0.8": "1.0.8",
     "jsr:@std/fmt@^1.0.10": "1.0.10",
     "jsr:@std/fmt@^1.0.8": "1.0.8",
-    "jsr:@std/fs@^1.0.22": "1.0.24",
+    "jsr:@std/fs@^1.0.24": "1.0.24",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/media-types@1.1.0": "1.1.0",
     "jsr:@std/media-types@^1.1.0": "1.1.0",
     "jsr:@std/path@1.1.6": "1.1.6",
-    "jsr:@std/path@^1.1.4": "1.1.6",
     "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@std/testing@1.0.17": "1.0.17",
+    "jsr:@std/path@^1.1.6": "1.1.6",
+    "jsr:@std/testing@1.0.20": "1.0.20",
     "jsr:@std/yaml@*": "1.0.10",
     "jsr:@std/yaml@1.0.10": "1.0.10",
     "jsr:@std/yaml@^1.0.10": "1.0.10"
@@ -72,15 +72,15 @@
         "jsr:@std/internal@^1.0.14"
       ]
     },
-    "@std/testing@1.0.17": {
-      "integrity": "87bdc2700fa98249d48a17cd72413352d3d3680dcfbdb64947fd0982d6bbf681",
+    "@std/testing@1.0.20": {
+      "integrity": "21380ed438672762e4ec549cbf4fe41c5b68f5598773a30b64abe7375513e721",
       "dependencies": [
-        "jsr:@std/assert@^1.0.17",
+        "jsr:@std/assert@^1.0.19",
         "jsr:@std/async",
         "jsr:@std/data-structures",
         "jsr:@std/fs",
-        "jsr:@std/internal@^1.0.12",
-        "jsr:@std/path@^1.1.4"
+        "jsr:@std/internal@^1.0.14",
+        "jsr:@std/path@^1.1.6"
       ]
     },
     "@std/yaml@1.0.10": {
@@ -93,7 +93,7 @@
       "jsr:@std/cli@1.0.32",
       "jsr:@std/media-types@1.1.0",
       "jsr:@std/path@1.1.6",
-      "jsr:@std/testing@1.0.17",
+      "jsr:@std/testing@1.0.20",
       "jsr:@std/yaml@1.0.10"
     ]
   }
