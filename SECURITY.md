@@ -21,13 +21,13 @@ have its owner revoke or rotate it; deleting it from a file is not sufficient.
 
 Test and lint jobs use read-only permissions on GitHub-hosted runners, with
 SHA-pinned actions, a checksum-verified Deno runtime, and frozen dependencies.
-GitHub-managed CodeQL additionally scans JavaScript/TypeScript and Actions with
-the extended security suite and reports results to code scanning. Preserve
-required security results and code-scanning merge protection; Code Quality
-checks are not a substitute. See the
-[scanning policy](CONTRIBUTING.md#security-scanning) for coverage limits. Do not
-provide PATs or repository secrets to these jobs. Package publishing,
-third-party SDK integration jobs, and release automation remain disabled until
-separately approved. Maintainers must complete the private staging review,
-provenance review, secret scan, and destination repository controls before any
-public import or release.
+The explicit CodeQL workflow additionally scans JavaScript/TypeScript and
+Actions with the extended security suite, including Dependabot pull requests,
+and reports results using `security-events: write`. Preserve required security
+results and code-scanning merge protection; Code Quality checks are not a
+substitute. See the [scanning policy](CONTRIBUTING.md#security-scanning) for
+coverage limits. Do not provide PATs or repository secrets to these jobs.
+Package publishing, third-party SDK integration jobs, and release automation
+remain disabled until separately approved. Maintainers must complete the private
+staging review, provenance review, secret scan, and destination repository
+controls before any public import or release.

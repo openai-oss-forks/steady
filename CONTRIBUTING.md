@@ -50,21 +50,29 @@ approval. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ### Security scanning
 
-GitHub-managed CodeQL default setup scans JavaScript/TypeScript and GitHub
-Actions with the extended security suite on supported pushes and pull requests,
-and weekly. Keep both languages enabled. The main ruleset requires CodeQL
-results and blocks code-scanning and security alerts at all severities. Preserve
-the required security result check as well as the lint and test checks; a
-successful Code Quality run does not satisfy security scanning.
+The [CodeQL workflow](.github/workflows/codeql.yml) scans JavaScript/TypeScript
+and GitHub Actions with the extended security suite on pull requests (including
+Dependabot), pushes to `main`, and weekly. Keep both languages enabled and
+retain the `Analyze (actions)` and `Analyze (javascript-typescript)` job names.
+The main ruleset requires both analyses and the CodeQL result, and blocks
+code-scanning and security alerts at all severities. Preserve these requirements
+as well as the lint and test checks; a successful Code Quality run does not
+satisfy security scanning.
 
 Before merging, verify both security analyses completed for the current revision
-and triage their findings. GitHub's managed setup excludes fork pull requests,
-and its code-scanning ruleset gate does not apply to Dependabot PRs. Required
-status checks and maintainer review remain necessary; do not bypass a missing
-security result. External contributions remain disabled. Before accepting fork
-PRs or enabling a merge queue, configure and verify scanning and enforcement for
-those events. See GitHub's
-[default setup coverage](https://docs.github.com/en/code-security/concepts/code-scanning/setup-types)
+and triage their findings. Use advanced setup: GitHub-managed default setup does
+not run the required analyses on Dependabot PRs. Keep default setup disabled
+while this workflow is active. CodeQL jobs use GitHub-hosted runners, SHA-pinned
+actions, no persisted checkout credentials or shared caches, and only
+`contents: read` plus `security-events: write` for analysis uploads. The
+`pull_request` event supports Dependabot analysis uploads without a PAT or
+repository secret; never replace it with privileged `pull_request_target`.
+
+Required status checks and maintainer review remain necessary; do not bypass a
+missing security result. External contributions remain disabled. Before
+accepting fork PRs or enabling a merge queue, verify scanning and enforcement
+for those events. See GitHub's
+[advanced setup guidance](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/configure-code-scanning/configuring-advanced-setup-for-code-scanning)
 and
 [merge protection limitations](https://docs.github.com/en/code-security/concepts/code-scanning/merge-protection).
 
