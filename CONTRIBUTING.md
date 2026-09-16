@@ -48,6 +48,26 @@ process below is the only exception to the ordinary release-age requirement. Use
 automation, and third-party SDK integration jobs disabled pending separate
 approval. See [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
+### Security scanning
+
+GitHub-managed CodeQL default setup scans JavaScript/TypeScript and GitHub
+Actions with the extended security suite on supported pushes and pull requests,
+and weekly. Keep both languages enabled. The main ruleset requires CodeQL
+results and blocks code-scanning and security alerts at all severities. Preserve
+the required security result check as well as the lint and test checks; a
+successful Code Quality run does not satisfy security scanning.
+
+Before merging, verify both security analyses completed for the current revision
+and triage their findings. GitHub's managed setup excludes fork pull requests,
+and its code-scanning ruleset gate does not apply to Dependabot PRs. Required
+status checks and maintainer review remain necessary; do not bypass a missing
+security result. External contributions remain disabled. Before accepting fork
+PRs or enabling a merge queue, configure and verify scanning and enforcement for
+those events. See GitHub's
+[default setup coverage](https://docs.github.com/en/code-security/concepts/code-scanning/setup-types)
+and
+[merge protection limitations](https://docs.github.com/en/code-security/concepts/code-scanning/merge-protection).
+
 ## Dependency updates
 
 [Dependabot](.github/dependabot.yml) checks Deno and GitHub Actions weekly with
