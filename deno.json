@@ -10,7 +10,7 @@
     "./packages/*"
   ],
   "imports": {
-    "@std/cli": "jsr:@std/cli@1.0.24",
+    "@std/cli": "jsr:@std/cli@1.0.32",
     "@std/assert": "jsr:@std/assert@1.0.18",
     "@std/media-types": "jsr:@std/media-types@1.1.0",
     "@std/path": "jsr:@std/path@1.1.4",
