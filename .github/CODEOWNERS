@@ -1,3 +1,3 @@
 # Require maintainer review for every change, including this file.
-# Owners must have accepted repository access with Write permission or higher.
-* @apcha-oai @jbeckwith-oai @dpiet-oai @jamieb-oai @GrantBirki @alexander-oai @curtis-oai @greg-openai @HAYDEN-OAI @jspenser-openai @mh-root-01 @mhunter-openai @tarac-oai
+# Owners must be SDK team members with accepted repository Admin access.
+* @apcha-oai @jbeckwith-oai @dpiet-oai @HAYDEN-OAI @marcuswood-oai @saioai @markstuart-oai
