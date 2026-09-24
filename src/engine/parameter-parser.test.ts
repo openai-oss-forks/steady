@@ -5,7 +5,8 @@
  * deep coercion, and expected-key computation.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
+import { RequestLimitError } from "../server/limits.ts";
 import { wrapURLSearchParams } from "../param-format.ts";
 import type { ResolvedParameter } from "./diagnostic-engine.ts";
 import {
@@ -593,6 +594,79 @@ Deno.test("parseQueryParam: flat object not present when no properties match", (
 
   const result = parseQueryParam(source, param, "auto", "flat");
   assertEquals(result.present, false);
+});
+
+Deno.test("parseQueryParam: dotted array bounds cover objects and array-object encodings", () => {
+  const objectSchema = {
+    type: "object" as const,
+    properties: {
+      tags: { type: "array" as const, items: { type: "integer" as const } },
+    },
+  };
+  const objectParam = makeParam({ name: "filter", schema: objectSchema });
+  const arrayParam = makeParam({
+    name: "filter",
+    schema: { type: "array", items: objectSchema },
+  });
+  for (
+    const [param, prefix] of [
+      [objectParam, "filter.tags"],
+      [arrayParam, "filter.tags"],
+      [arrayParam, "filter.0.tags"],
+    ] as const
+  ) {
+    const repeated = param === arrayParam && prefix === "filter.tags";
+    for (
+      const suffix of repeated ? ["4294967294", "0004294967294"] : [
+        "4294967294",
+        "0004294967294",
+        "%2B4294967294",
+        "4294967294junk",
+        "bad.4294967294",
+      ]
+    ) {
+      assertThrows(
+        () =>
+          parseQueryParam(
+            sourceFromQuery(`${prefix}.0=1&${prefix}.${suffix}=2`),
+            param,
+            "auto",
+            "dots",
+          ),
+        RequestLimitError,
+      );
+    }
+    const value = parseQueryParam(
+      sourceFromQuery(`${prefix}.0=1`),
+      param,
+      "auto",
+      "dots",
+    );
+    assertEquals(value, {
+      present: true,
+      value: param === objectParam ? { tags: [1] } : [{ tags: [1] }],
+    });
+  }
+
+  // Bracket indices and outer dotted object-array indices are compacted.
+  assertEquals(
+    parseQueryParam(
+      sourceFromQuery("filter[tags][4294967294]=1"),
+      objectParam,
+      "auto",
+      "brackets",
+    ),
+    { present: true, value: { tags: [1] } },
+  );
+  assertEquals(
+    parseQueryParam(
+      sourceFromQuery("filter.4294967294.tags.0=1"),
+      arrayParam,
+      "auto",
+      "dots",
+    ),
+    { present: true, value: [{ tags: [1] }] },
+  );
 });
 
 // ── parseQueryParam: no schema ─────────────────────────────────────

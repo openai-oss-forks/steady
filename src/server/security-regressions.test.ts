@@ -16,6 +16,72 @@ const jsonResponse = (example: unknown) => ({
 });
 
 Deno.test({
+  name: "dotted query array limits reject expansion and preserve server health",
+  async fn() {
+    const spec: OpenAPIRaw = {
+      openapi: "3.1.0",
+      info: { title: "Dotted query limits", version: "1" },
+      paths: {
+        "/search": {
+          get: {
+            parameters: [{
+              in: "query",
+              name: "filter",
+              schema: {
+                type: "object",
+                properties: {
+                  tags: { type: "array", items: { type: "string" } },
+                },
+              },
+            }],
+            responses: { "200": jsonResponse({ ok: true }) },
+          },
+        },
+      },
+    };
+    for (const useHeader of [true, false]) {
+      const server = new MockServer(spec, {
+        ...config,
+        validator: { queryObjectFormat: useHeader ? "auto" : "dots" },
+      });
+      const base = `http://127.0.0.1:${await server.start()}`;
+      const headers = new Headers({ "X-Steady-Session": "dotted-limits" });
+      if (useHeader) headers.set("X-Steady-Query-Object-Format", "dots");
+      try {
+        for (
+          const query of [
+            "filter.tags.4294967294=synthetic",
+            "filter.tags.0=ok&filter.tags.4294967294junk=synthetic",
+          ]
+        ) {
+          const response = await fetch(`${base}/search?${query}`, { headers });
+          assertEquals(response.status, 400);
+          assertEquals(response.headers.get("X-Steady-Error-1-Code"), "E3024");
+          assertEquals(await response.json(), {
+            error: "Dotted parameter array index exceeds the limit",
+          });
+          const health = await fetch(`${base}/_x-steady/health`);
+          assertEquals(health.status, 200);
+          assertEquals((await health.json()).status, "healthy");
+        }
+        const normal = await fetch(`${base}/search?filter.tags.0=ok`, {
+          headers,
+        });
+        assertEquals(normal.status, 200);
+        assertEquals(await normal.json(), { ok: true });
+        const report = await (
+          await fetch(`${base}/_x-steady/sessions/dotted-limits`)
+        ).json();
+        assertEquals(report.summary, { total: 3, valid: 1, invalid: 2 });
+        assertEquals(report.result, "failed");
+      } finally {
+        await server.stop();
+      }
+    }
+  },
+});
+
+Deno.test({
   name: "Unicode and control bytes in diagnostics are safe HTTP headers",
   sanitizeOps: false,
   sanitizeResources: false,

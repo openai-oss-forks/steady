@@ -5,7 +5,8 @@
  * query parameter validation and form data parsing.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
+import { RequestLimitError } from "./server/limits.ts";
 import {
   type FormFormat,
   getArrayValues,
@@ -278,6 +279,39 @@ Deno.test("setNestedValue: handles empty path", () => {
   setNestedValue(obj, [], "value");
 
   assertEquals(obj, {});
+});
+
+Deno.test("setNestedValue: rejects oversized array indices before extending length", () => {
+  for (
+    const index of [
+      "1000",
+      "4294967294",
+      "0004294967294",
+      "+4294967294",
+      "4294967294junk",
+      "9".repeat(400),
+    ]
+  ) {
+    const items = ["first"];
+    const obj = Object.assign(Object.create(null), { items });
+    assertThrows(
+      () => setNestedValue(obj, ["items", index], "synthetic"),
+      RequestLimitError,
+      "Dotted parameter array index exceeds the limit",
+    );
+    assertEquals(items.length, 1);
+    assertEquals(items[0], "first");
+  }
+});
+
+Deno.test("setNestedValue: accepts bounded indices and numeric object keys", () => {
+  const items: unknown[] = [];
+  const obj = Object.assign(Object.create(null), { items });
+  setNestedValue(obj, ["items", "999"], "last");
+  assertEquals(items.length, 1000);
+  assertEquals(items[999], "last");
+  setNestedValue(obj, ["4294967294"], "object key");
+  assertEquals(obj["4294967294"], "object key");
 });
 
 // =============================================================================

@@ -6,6 +6,7 @@
  */
 
 import type { QueryArrayFormat, QueryObjectFormat } from "./types.ts";
+import { RequestLimitError } from "./server/limits.ts";
 import { isPlainObject } from "@steady/json-pointer";
 import {
   coerceFormValue,
@@ -374,6 +375,9 @@ function parseRepeatedEntries(
 // Object Parsing
 // =============================================================================
 
+// Bound sparse-array expansion before coercion or validation walks its length.
+const MAX_DOTTED_ARRAY_LENGTH = 1000;
+
 /**
  * Set a value at a nested path in an object.
  * Creates intermediate objects/arrays as needed.
@@ -426,6 +430,11 @@ export function setNestedValue(
     } else if (Array.isArray(current)) {
       const idx = parseInt(lastKey, 10);
       if (!isNaN(idx) && idx >= 0) {
+        if (idx >= MAX_DOTTED_ARRAY_LENGTH) {
+          throw new RequestLimitError(
+            "Dotted parameter array index exceeds the limit",
+          );
+        }
         current[idx] = value;
       }
     }
