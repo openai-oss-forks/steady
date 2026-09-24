@@ -128,6 +128,10 @@ per-request via headers.
 | `brackets`   | `id[role]=admin&id[firstName]=Alex` | `style=deepObject`          |
 | `dots`       | `id.role=admin&id.firstName=Alex`   | Non-standard (SDK compat)   |
 
+Nested arrays built from dotted query keys are limited to indices 0 through 999.
+Larger indices return HTTP 400 with diagnostic E3024 before coercion or
+validation.
+
 ### Form Parameter Serialization
 
 Form body parameters (application/x-www-form-urlencoded) use the same formats as
