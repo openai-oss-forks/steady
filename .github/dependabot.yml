@@ -8,6 +8,10 @@ updates:
     cooldown:
       default-days: 14
     open-pull-requests-limit: 5
+    # This only filters version updates; security updates remain eligible.
+    allow:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -21,3 +25,7 @@ updates:
       codeql:
         patterns:
           - "github/codeql-action/*"
+    # This only filters version updates; security updates remain eligible.
+    allow:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
