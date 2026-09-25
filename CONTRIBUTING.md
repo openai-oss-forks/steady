@@ -94,6 +94,12 @@ Dependabot group updates them together, including major versions; preserve this
 group instead of updating `init` and `analyze` independently. The regular test
 suite checks that the workflow pins match, including for manual updates.
 
+The repository Actions allowlist must permit `github/codeql-action/init@*` and
+`github/codeql-action/analyze@*`, with full-SHA pinning still required. The
+pattern `github/codeql-action@*` does not cover these sub-actions, and allowing
+only one release SHA prevents reviewed Dependabot updates from running. Keep the
+workflow itself pinned to the reviewed release SHA.
+
 Maintainers listed in CODEOWNERS must check updater jobs and review pending PRs
 at least weekly. After this configuration reaches `main`, use **Insights >
 Dependency graph > Dependabot > Recent update jobs** to confirm both ecosystems
