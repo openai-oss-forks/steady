@@ -16,3 +16,8 @@ updates:
     cooldown:
       default-days: 14
     open-pull-requests-limit: 5
+    groups:
+      # CodeQL steps exchange state and must use the same action release.
+      codeql:
+        patterns:
+          - "github/codeql-action/*"
