@@ -79,15 +79,19 @@ and
 ## Dependency updates
 
 [Dependabot](.github/dependabot.yml) checks Deno and GitHub Actions weekly with
-a 14-day cooldown for ordinary updates. The root Deno job covers `deno.json`,
-the `packages/*` workspace manifests, and their shared `deno.lock`. Keep imports
-at exact versions and Actions at full SHAs with release-tag comments. Review the
-release date, upstream changes, provenance, licenses, and all transitive
-lockfile changes before merging, even when the PR is automated. Missing
-release-date metadata is not an exemption from the 14-day policy. Run the
-validation commands above and `./scripts/bootstrap` against the committed frozen
-lockfile. Do not merge a manifest-only update that leaves the lockfile stale,
-remove integrity hashes, or disable frozen installs to get CI passing.
+a 14-day cooldown for ordinary updates. Only semver major releases generate
+routine version-update PRs; minor and patch releases are excluded. The
+[`allow.update-types` filter](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#update-types-allow)
+does not restrict security updates, which remain eligible at any semver level.
+The root Deno job covers `deno.json`, the `packages/*` workspace manifests, and
+their shared `deno.lock`. Keep imports at exact versions and Actions at full
+SHAs with release-tag comments. Review the release date, upstream changes,
+provenance, licenses, and all transitive lockfile changes before merging, even
+when the PR is automated. Missing release-date metadata is not an exemption from
+the 14-day policy. Run the validation commands above and `./scripts/bootstrap`
+against the committed frozen lockfile. Do not merge a manifest-only update that
+leaves the lockfile stale, remove integrity hashes, or disable frozen installs
+to get CI passing.
 
 Keep all `github/codeql-action/*` steps on the same release SHA. The `codeql`
 Dependabot group updates them together, including major versions; preserve this
