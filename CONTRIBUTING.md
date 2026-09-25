@@ -89,6 +89,11 @@ validation commands above and `./scripts/bootstrap` against the committed frozen
 lockfile. Do not merge a manifest-only update that leaves the lockfile stale,
 remove integrity hashes, or disable frozen installs to get CI passing.
 
+Keep all `github/codeql-action/*` steps on the same release SHA. The `codeql`
+Dependabot group updates them together, including major versions; preserve this
+group instead of updating `init` and `analyze` independently. The regular test
+suite checks that the workflow pins match, including for manual updates.
+
 Maintainers listed in CODEOWNERS must check updater jobs and review pending PRs
 at least weekly. After this configuration reaches `main`, use **Insights >
 Dependency graph > Dependabot > Recent update jobs** to confirm both ecosystems
