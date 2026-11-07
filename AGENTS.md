@@ -1,7 +1,7 @@
 # Agent guidance
 
 Steady is a source-only, local SDK testing tool that validates HTTP requests
-against OpenAPI specifications and generates mock responses. Read
+against OpenAPI specifications and generates mock responses. Read and follow
 [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and
 [PROVENANCE.md](PROVENANCE.md) before changing it.
 
@@ -48,32 +48,23 @@ of `src/`; `scripts/check-boundaries.ts` enforces this boundary.
 
 ## Dependencies and automation
 
-- Preserve exact dependency versions, the frozen lockfile, and the existing
-  `minimumDependencyAge: "P14D"` policy for ordinary updates. Dependabot opens
-  Deno and GitHub Actions update PRs for maintainer review; do not enable
-  auto-merge. Follow [CONTRIBUTING.md](CONTRIBUTING.md#dependency-updates) for
-  maturity and provenance requirements. Only its
-  [urgent security process](CONTRIBUTING.md#urgent-security-updates) permits
-  explicitly approved, narrowly scoped, temporary age-policy exceptions.
-- Review provenance for dependency changes and upstream imports. Preserve pinned
-  revisions, license/attribution notices, and the records described in
-  [PROVENANCE.md](PROVENANCE.md). Do not import vendor corpora or unreviewed
-  assets.
-- Keep CI on GitHub-hosted runners with `contents: read`, no persisted checkout
-  credentials, and full-SHA-pinned external actions with release-tag comments.
-  Verify the pinned Deno archive checksum and install frozen dependencies. Do
-  not add PATs, repository secrets, shared caches, self-hosted runners, or
-  privileged PR-code execution; follow the workflow rules in
-  [CONTRIBUTING.md](CONTRIBUTING.md).
-- Publishing, release automation, and third-party SDK integration jobs require
-  separate approval and remain disabled. Preserve managed hooks, required
-  reviews, secret scanning, and push protection; never bypass hooks or overwrite
-  their configuration.
-- Preserve the explicit CodeQL workflow for JavaScript/TypeScript and Actions,
-  including Dependabot PR coverage and required results. Code Quality runs do
-  not replace security analysis. Follow
-  [CONTRIBUTING.md](CONTRIBUTING.md#security-scanning) for review requirements
-  and scanning configuration.
+Follow these mandatory policies:
+
+- [Dependency updates](CONTRIBUTING.md#dependency-updates): exact pins, frozen
+  lockfile, 14-day maturity/provenance review, and reviewed Dependabot PRs
+  without auto-merge. Age exceptions require the explicitly approved, scoped,
+  temporary [urgent security process](CONTRIBUTING.md#urgent-security-updates).
+- [PROVENANCE.md](PROVENANCE.md): pinned source/license/attribution records for
+  dependencies and imports; no vendor corpora or unreviewed assets.
+- [CI rules](CONTRIBUTING.md#continuous-integration): runner, permission,
+  credential, action-pin, Deno-checksum, and frozen-install controls; no
+  privileged PR execution.
+- Publishing, release automation, and third-party SDK integration remain
+  disabled pending separate approval. Preserve managed hooks/configuration,
+  required reviews, secret scanning, and push protection; never bypass them.
+- [Security scanning](CONTRIBUTING.md#security-scanning): explicit JS/TS and
+  Actions CodeQL, Dependabot coverage, required results, review, and
+  configuration. Code Quality is not security analysis.
 
 ## Validation and review
 
@@ -94,12 +85,10 @@ root:
 commands, results, and any validation gaps in the PR; never hide a failing
 check.
 
-Before implementation or review, define the requested outcome, acceptance
-criteria, affected paths/tests, and explicit non-goals. Keep the diff limited to
-that outcome and supported regressions it introduces or worsens. Report
-unrelated defects and broader improvements separately. Obtain agreement before
-materially expanding scope, crossing ownership boundaries, changing public APIs,
-or restructuring architecture. Security-sensitive changes need security review
-and focused regression coverage. Submit changes through a PR with approval from
-the maintainers in [CODEOWNERS](.github/CODEOWNERS), as required by
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Before implementation/review, define outcome, acceptance criteria, affected
+paths/tests, and non-goals. Limit changes to that outcome and supported
+regressions introduced or worsened; report unrelated defects/improvements
+separately. Obtain agreement before materially expanding scope, crossing
+ownership boundaries, changing public APIs, or restructuring architecture.
+Security-sensitive changes require security review and focused regressions.
+Submit PRs for [CODEOWNERS](.github/CODEOWNERS) approval under CONTRIBUTING.md.
